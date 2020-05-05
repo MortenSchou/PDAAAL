@@ -56,6 +56,7 @@ namespace pdaaal {
 
     bool Reducer::tos_t::forward_stack(const tos_t& prev, size_t all_labels)
     {
+        _fs_counter++;
         auto os = _stack.size();
         if (_stack.size() != all_labels) {
             if (prev._stack.size() == all_labels) {

@@ -29,6 +29,7 @@
 #define PDAAAL_REDUCER_H
 
 #include <queue>
+#include <iostream>
 #include "PDA.h"
 
 namespace pdaaal {
@@ -36,6 +37,8 @@ namespace pdaaal {
     class Reducer {
     private:
         struct tos_t {
+            size_t _fs_counter = 0;
+
             std::vector<uint32_t> _tos; // TODO: some symbolic representation would be better here
             std::vector<uint32_t> _stack; // TODO: some symbolic representation would be better here
 
@@ -162,7 +165,11 @@ namespace pdaaal {
                 // it could potentially work as fixpoint; not sure if it has any effect.
                 Reducer::target_tos_prune(pda, terminal_id);
             }
-
+            size_t fs_count = 0;
+            for (const auto& tos : approximation) {
+                fs_count += tos._fs_counter;
+            }
+            std::cout << "#Calls to forward_stack: " << fs_count << std::endl;
             size_t after_cnt = Reducer::size(pda, initial_id, terminal_id);
             return std::make_pair(cnt, after_cnt);
         }
