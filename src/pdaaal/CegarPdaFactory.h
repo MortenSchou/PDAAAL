@@ -511,10 +511,18 @@ namespace pdaaal {
     public:
         template<bool use_pre_star=false, bool use_dual_star=false>
         std::optional<concrete_trace_t> cegar_solve(Factory&& factory, const NFA<label_t>& initial_headers, const NFA<label_t>& final_headers) {
+            stopwatch compile_clock(false);
             stopwatch post_star_clock(false);
+            stopwatch reconstruct_clock(false);
+            stopwatch refine_clock(false);
             while(true) {
+                stopwatch compile_clock_1;
+                compile_clock.start();
                 auto instance = factory.compile(initial_headers, final_headers);
+                compile_clock.stop();
+                compile_clock_1.stop();
 
+                stopwatch post_star_clock_1;
                 post_star_clock.start();
                 bool result;
                 if constexpr (use_pre_star) {
@@ -525,18 +533,30 @@ namespace pdaaal {
                     result = Solver::post_star_accepts(instance);
                 }
                 post_star_clock.stop();
+                post_star_clock_1.stop();
                 if (!result) {
                     return std::nullopt; // No trace.
                 }
-
+                stopwatch reconstruct_clock_1;
+                reconstruct_clock.start();
                 Reconstruction reconstruction(factory, instance, initial_headers, final_headers);
 
                 auto res = reconstruction.template reconstruct_trace<use_dual_star>();
+                reconstruct_clock.stop();
+                reconstruct_clock_1.stop();
 
+                std::cerr << "Time for compile: " << compile_clock_1.duration() << std::endl;
+                std::cerr << "Time for post*: " << post_star_clock_1.duration() << std::endl;
+                std::cerr << "Time for reconstruct: " << reconstruct_clock_1.duration() << std::endl;
+                stopwatch refine_clock_1;
                 if (std::holds_alternative<concrete_trace_t>(res)) {
+                    std::cerr << "Accumulated time for compile: " << compile_clock.duration() << std::endl;
                     std::cerr << "Accumulated time for post*: " << post_star_clock.duration() << std::endl;
+                    std::cerr << "Accumulated time for reconstruct: " << reconstruct_clock.duration() << std::endl;
+                    std::cerr << "Accumulated time for refine: " << refine_clock.duration() << std::endl;
                     return std::get<concrete_trace_t>(res);
                 } else if (std::holds_alternative<refinement_t>(res)) {
+                    refine_clock.start();
                     if (std::get<refinement_t>(res).index() == 0) {
                         factory.reset_pda(instance.move_pda_refinement_mapping(std::get<0>(std::get<refinement_t>(res)).second));
                     } else {
@@ -544,10 +564,14 @@ namespace pdaaal {
                     }
                     factory.refine(std::get<refinement_t>(std::move(res)));
                 } else {
+                    refine_clock.start();
                     assert(std::holds_alternative<header_refinement_t>(res));
                     factory.reset_pda(instance.move_pda_refinement_mapping(std::get<header_refinement_t>(res)));
                     factory.refine(std::get<header_refinement_t>(std::move(res)));
                 }
+                refine_clock.stop();
+                refine_clock_1.stop();
+                std::cerr << "Time for refine: " << refine_clock_1.duration() << std::endl;
             }
         }
     };
