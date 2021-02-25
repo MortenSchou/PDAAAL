@@ -501,7 +501,7 @@ namespace pdaaal {
     };
 
 
-    template <typename Factory, typename Reconstruction>
+    template <typename Factory, typename Reconstruction, bool logging = false>
     class CEGAR {
         static_assert(std::is_same_v<typename Factory::label_t, typename Reconstruction::label_t>);
         using label_t = typename Reconstruction::label_t;
@@ -545,15 +545,19 @@ namespace pdaaal {
                 reconstruct_clock.stop();
                 reconstruct_clock_1.stop();
 
-                std::cerr << "Time for compile: " << compile_clock_1.duration() << std::endl;
-                std::cerr << "Time for post*: " << post_star_clock_1.duration() << std::endl;
-                std::cerr << "Time for reconstruct: " << reconstruct_clock_1.duration() << std::endl;
+                if constexpr (logging) {
+                    std::cerr << "Time for compile: " << compile_clock_1.duration() << std::endl;
+                    std::cerr << "Time for post*: " << post_star_clock_1.duration() << std::endl;
+                    std::cerr << "Time for reconstruct: " << reconstruct_clock_1.duration() << std::endl;
+                }
                 stopwatch refine_clock_1;
                 if (std::holds_alternative<concrete_trace_t>(res)) {
-                    std::cerr << "Accumulated time for compile: " << compile_clock.duration() << std::endl;
-                    std::cerr << "Accumulated time for post*: " << post_star_clock.duration() << std::endl;
-                    std::cerr << "Accumulated time for reconstruct: " << reconstruct_clock.duration() << std::endl;
-                    std::cerr << "Accumulated time for refine: " << refine_clock.duration() << std::endl;
+                    if constexpr (logging) {
+                        std::cerr << "Accumulated time for compile: " << compile_clock.duration() << std::endl;
+                        std::cerr << "Accumulated time for post*: " << post_star_clock.duration() << std::endl;
+                        std::cerr << "Accumulated time for reconstruct: " << reconstruct_clock.duration() << std::endl;
+                        std::cerr << "Accumulated time for refine: " << refine_clock.duration() << std::endl;
+                    }
                     return std::get<concrete_trace_t>(res);
                 } else if (std::holds_alternative<refinement_t>(res)) {
                     refine_clock.start();
@@ -571,7 +575,9 @@ namespace pdaaal {
                 }
                 refine_clock.stop();
                 refine_clock_1.stop();
-                std::cerr << "Time for refine: " << refine_clock_1.duration() << std::endl;
+                if constexpr (logging) {
+                    std::cerr << "Time for refine: " << refine_clock_1.duration() << std::endl;
+                }
             }
         }
     };
