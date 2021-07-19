@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.14)
-project(PDAAAL-lib CXX)
+
+project(PDAAAL-lib VERSION ${PDAAAL_VERSION} LANGUAGES CXX)
 
 #set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 #set(CMAKE_VISIBILITY_INLINES_HIDDEN YES)
@@ -15,6 +16,7 @@ target_sources(pdaaal
     PUBLIC  ${HEADER_FILES}
 )
 target_compile_features(pdaaal PUBLIC cxx_std_17)
+target_compile_definitions(pdaaal PUBLIC $<$<CONFIG:Release>:NDEBUG>)
 target_include_directories(pdaaal PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
@@ -73,17 +75,24 @@ target_link_libraries(pdaaal PUBLIC Boost::headers pegtl absl::hash)
 
 include(GNUInstallDirs)
 install(DIRECTORY pdaaal/ pdaaal/parsing/ pdaaal/utils/
-        DESTINATION pdaaal)
-install(TARGETS pdaaal
-        EXPORT pdaaal-config
-        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(EXPORT pdaaal-config
-        NAMESPACE pdaaal::
-        FILE pdaaal-targets.cmake
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/pdaaal)
+install(TARGETS  pdaaal
+        EXPORT   pdaaal-targets
+        RUNTIME  DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE  DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(EXPORT      pdaaal-targets
+        FILE        pdaaal-targets.cmake
+        NAMESPACE   pdaaal::
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/pdaaal)
 configure_file(pdaaal-config.cmake.in pdaaal-config.cmake @ONLY)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/pdaaal-config.cmake"
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/pdaaal)
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file("pdaaal-config-version.cmake"
+    VERSION ${PDAAAL_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+install(FILES "pdaaal-config-version.cmake"
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/pdaaal)

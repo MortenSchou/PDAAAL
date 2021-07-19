@@ -38,7 +38,7 @@ else()
             DEPENDS pdaaal ${PDAAAL_BIN_SOURCE_FILES}
             VERBATIM)
 endif()
-add_custom_target(generate_hash DEPENDS "git_hash.h")
+add_custom_target(pdaaal_generate_hash DEPENDS "git_hash.h")
 
 # Executable for the stand-alone binary version.
 add_executable(pdaaal-bin)
@@ -46,5 +46,5 @@ target_sources(pdaaal-bin PRIVATE ${PDAAAL_BIN_SOURCE_FILES} ${HEADER_FILES} ${C
 target_link_libraries(pdaaal-bin PRIVATE pdaaal Boost::program_options nlohmann_json::nlohmann_json)
 target_include_directories(pdaaal-bin PRIVATE ${CMAKE_CURRENT_BINARY_DIR}) # git_hash.h is located here
 target_include_directories(pdaaal-bin PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-add_dependencies(pdaaal-bin generate_hash)
+add_dependencies(pdaaal-bin pdaaal_generate_hash)
 set_target_properties(pdaaal-bin PROPERTIES OUTPUT_NAME pdaaal)
