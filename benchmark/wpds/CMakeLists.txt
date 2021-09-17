@@ -16,7 +16,7 @@ ExternalProject_add(wpds
 ExternalProject_Get_property(wpds SOURCE_DIR)
 add_library(wpds-lib INTERFACE)
 add_dependencies(wpds-lib wpds)
-add_library(wpds::wpds ALIAS wpds-lib)
+add_library(wpds::wpds-lib ALIAS wpds-lib)
 
 include(GNUInstallDirs)
 target_link_libraries(wpds-lib INTERFACE
@@ -33,3 +33,14 @@ install(FILES ${SOURCE_DIR}/*.h
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/wpds)
 install(FILES ${SOURCE_DIR}/libwpds++.a
         DESTINATION ${CMAKE_INSTALL_LIBDIR})
+# More or less boilerplate stuff that ensures everything is installed correctly
+install(TARGETS  wpds-lib
+        EXPORT   wpds-targets
+        RUNTIME  DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE  DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(EXPORT      wpds-targets
+        FILE        wpds-targets.cmake
+        NAMESPACE   wpds::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/wpds)
