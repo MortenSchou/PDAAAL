@@ -230,8 +230,12 @@ namespace wpds_pdaaal {
                     }
                 }
             }
+            // WPDS::CA supports only a single initial state. We simulate multiple initial states using epsilon transitions.
+            automaton.add_initial_state(str2key("initial"));
+            for (auto initial_state : initial_states) {
+                automaton.add(automaton.initial_state(), WPDS_EPSILON, WPDS_Rule<W>::key_from_size_t(initial_state), W::one());
+            }
 
-            // TODO... How to handle initial state(s)??
             return automaton;
         }
 
