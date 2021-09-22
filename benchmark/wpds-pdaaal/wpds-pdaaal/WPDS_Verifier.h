@@ -152,11 +152,11 @@ namespace wpds_pdaaal {
 //        using pda_t = TypedPDA<T,W,fut::type::vector,state_t,skip_state_mapping>;
 //        using pautomaton_t = PAutomaton<W>;
 //        using product_t = PAutomatonProduct<pda_t, pautomaton_t, W>;
-        WPDS_SolverInstance(wpds::WPDS<W>&& pda,
+        WPDS_SolverInstance(wpds::WPDS<W>& pda,
                         const pdaaal::NFA<size_t>& initial_nfa, const std::vector<size_t>& initial_states,
                         const pdaaal::NFA<size_t>& final_nfa,   const std::vector<size_t>& final_states,
                         const std::vector<wpds::wpds_key_t>& all_labels, size_t num_pda_states, wpds::Semiring<W>& s)
-                : _pda(std::move(pda)),
+                : _pda(pda),
                   _initial(make_CA(initial_nfa, initial_states, all_labels, num_pda_states, s)),
                   _final(make_CA(final_nfa, final_states, all_labels, num_pda_states, s)),
                   _s(s) {};
@@ -251,7 +251,7 @@ namespace wpds_pdaaal {
         }
 
     private:
-        wpds::WPDS<W> _pda;
+        wpds::WPDS<W>& _pda;
         wpds::CA<W> _initial;
         wpds::CA<W> _final;
         wpds::Semiring<W>& _s;
@@ -275,7 +275,7 @@ namespace wpds_pdaaal {
         };
         solver_instance_t compile(const pdaaal::NFA<label_t>& initial_headers, const pdaaal::NFA<label_t>& final_headers) {
             build_pda();
-            return solver_instance_t{std::move(_temp_pda), initial_headers, initial(), final_headers, accepting(), _all_labels, _max_pda_state+1, _s};
+            return solver_instance_t{_temp_pda, initial_headers, initial(), final_headers, accepting(), _all_labels, _max_pda_state+1, _s};
         }
     protected:
         virtual void build_pda() = 0;
