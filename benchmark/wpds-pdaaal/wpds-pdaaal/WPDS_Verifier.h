@@ -239,15 +239,15 @@ namespace wpds_pdaaal {
             return automaton;
         }
 
-        bool post_star() {
+        std::pair<bool,ref_ptr<W>> post_star() {
             wpds::CA<W> answer = wpds::poststar<W>(_pda, _initial, _s);
             ref_ptr<W> reglangWeight = answer.reglang_query(_final);
-            return !reglangWeight->equal(W::zero());
+            return std::make_pair(!reglangWeight->equal(W::zero()), reglangWeight);
         }
-        bool pre_star() {
+        std::pair<bool,ref_ptr<W>> pre_star() {
             wpds::CA<W> answer = wpds::poststar<W>(_pda, _final, _s);
             ref_ptr<W> reglangWeight = answer.reglang_query(_initial);
-            return !reglangWeight->equal(W::zero());
+            return std::make_pair(!reglangWeight->equal(W::zero()), reglangWeight);
         }
 
     private:
