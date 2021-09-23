@@ -155,20 +155,20 @@ namespace wpds_pdaaal {
         WPDS_SolverInstance(wpds::WPDS<W>& pda,
                         const pdaaal::NFA<size_t>& initial_nfa, const std::vector<size_t>& initial_states,
                         const pdaaal::NFA<size_t>& final_nfa,   const std::vector<size_t>& final_states,
-                        const std::vector<wpds::wpds_key_t>& all_labels, size_t num_pda_states, wpds::Semiring<W>& s)
+                        const std::vector<wpds::wpds_key_t>& all_labels, size_t max_pda_state, wpds::Semiring<W>& s)
                 : _pda(pda),
-                  _initial(make_CA(initial_nfa, initial_states, all_labels, num_pda_states, s)),
-                  _final(make_CA(final_nfa, final_states, all_labels, num_pda_states, s)),
-                  _s(s) {};
+                  _initial(make_CA(initial_nfa, initial_states, all_labels, max_pda_state, s)),
+                  _final(make_CA(final_nfa, final_states, all_labels, max_pda_state, s)),
+                  _s(s), _answer(_s) {};
 
         static wpds::CA<W> make_CA(const pdaaal::NFA<size_t>& nfa, const std::vector<size_t>& initial_states,
-                                   const std::vector<wpds::wpds_key_t>& all_labels, size_t num_pda_states, wpds::Semiring<W>& s) {
+                                   const std::vector<wpds::wpds_key_t>& all_labels, size_t max_pda_state, wpds::Semiring<W>& s) {
             wpds::CA<W> automaton(s);
 
             using nfastate_t = typename pdaaal::NFA<size_t>::state_t;
             std::unordered_map<const nfastate_t*, size_t> nfastate_to_id;
             std::vector<std::pair<const nfastate_t*,size_t>> waiting;
-            size_t next_id = num_pda_states;
+            size_t next_id = max_pda_state;
             auto get_nfastate_id = [&automaton, &waiting, &nfastate_to_id, &next_id](const nfastate_t* n) -> size_t {
                 // Adds nfastate if not yet seen.
                 size_t n_id;
@@ -233,21 +233,38 @@ namespace wpds_pdaaal {
             // WPDS::CA supports only a single initial state. We simulate multiple initial states using epsilon transitions.
             automaton.add_initial_state(str2key("initial"));
             for (auto initial_state : initial_states) {
-                automaton.add(automaton.initial_state(), WPDS_EPSILON, WPDS_Rule<W>::key_from_size_t(initial_state), W::one());
+                auto to = WPDS_Rule<W>::key_from_size_t(initial_state);
+                std::stringstream ss;
+                ss << initial_state;
+                auto label = str2key(ss.str()); // We need the label to be different from the normal labels. So we use string-to-key.
+                automaton.add(automaton.initial_state(), label, to, W::one());
             }
 
             return automaton;
         }
 
         std::pair<bool,ref_ptr<W>> post_star() {
-            wpds::CA<W> answer = wpds::poststar<W>(_pda, _initial, _s);
-            ref_ptr<W> reglangWeight = answer.reglang_query(_final);
+            _answer = wpds::poststar<W>(_pda, _initial, _s);
+            ref_ptr<W> reglangWeight = _answer.reglang_query(_final);
             return std::make_pair(!reglangWeight->equal(W::zero()), reglangWeight);
         }
         std::pair<bool,ref_ptr<W>> pre_star() {
-            wpds::CA<W> answer = wpds::poststar<W>(_pda, _final, _s);
-            ref_ptr<W> reglangWeight = answer.reglang_query(_initial);
+            _answer = wpds::poststar<W>(_pda, _final, _s);
+            ref_ptr<W> reglangWeight = _answer.reglang_query(_initial);
             return std::make_pair(!reglangWeight->equal(W::zero()), reglangWeight);
+        }
+        void get_trace() {
+            wpds::CA<W> product(_s);
+            product.query = _answer.get_query();
+            wpds::util::KeepLeft<W> wmaker;
+            if (_answer.get_query().is_poststar()) {
+                wpds::util::intersect<W,W,W>(_answer,_final,wmaker,product);
+            } else {
+                wpds::util::intersect<W,W,W>(_answer,_initial,wmaker,product);
+            }
+            product.path_summary();
+            auto answer = product.state_weight(product.initial_state());
+
         }
 
     private:
@@ -255,6 +272,7 @@ namespace wpds_pdaaal {
         wpds::CA<W> _initial;
         wpds::CA<W> _final;
         wpds::Semiring<W>& _s;
+        wpds::CA<W> _answer;
     };
 
 
