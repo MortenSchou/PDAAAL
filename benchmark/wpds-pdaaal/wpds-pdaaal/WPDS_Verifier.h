@@ -230,15 +230,23 @@ namespace wpds_pdaaal {
                     }
                 }
             }
+            // TODO: Add trans to all PDS states. Not just those in initial_state. Alternatively, do something smart after pre*/post*.
             // WPDS::CA supports only a single initial state. We simulate multiple initial states using epsilon transitions.
             automaton.add_initial_state(str2key("initial"));
-            for (auto initial_state : initial_states) {
-                auto to = WPDS_Rule<W>::key_from_size_t(initial_state);
+            for (size_t pda_state = 0; pda_state < max_pda_state; ++pda_state) { // Yes this is hacky...
+                auto to = WPDS_Rule<W>::key_from_size_t(pda_state);
                 std::stringstream ss;
-                ss << initial_state;
+                ss << pda_state;
                 auto label = str2key(ss.str()); // We need the label to be different from the normal labels. So we use string-to-key.
                 automaton.add(automaton.initial_state(), label, to, W::one());
             }
+//            for (auto initial_state : initial_states) {
+//                auto to = WPDS_Rule<W>::key_from_size_t(initial_state);
+//                std::stringstream ss;
+//                ss << initial_state;
+//                auto label = str2key(ss.str()); // We need the label to be different from the normal labels. So we use string-to-key.
+//                automaton.add(automaton.initial_state(), label, to, W::one());
+//            }
 
             return automaton;
         }
