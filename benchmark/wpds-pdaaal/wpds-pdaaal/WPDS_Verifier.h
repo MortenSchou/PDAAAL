@@ -257,7 +257,7 @@ namespace wpds_pdaaal {
             return std::make_pair(!reglangWeight->equal(W::zero()), reglangWeight);
         }
         std::pair<bool,ref_ptr<W>> pre_star() {
-            _answer = wpds::poststar<W>(_pda, _final, _s);
+            _answer = wpds::prestar<W>(_pda, _final, _s);
             ref_ptr<W> reglangWeight = _answer.reglang_query(_initial);
             return std::make_pair(!reglangWeight->equal(W::zero()), reglangWeight);
         }
