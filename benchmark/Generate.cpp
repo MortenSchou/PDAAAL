@@ -31,13 +31,13 @@
 #include <random>
 #include <iostream>
 #include <boost/program_options.hpp>
-#include <pdaaal/PAutomaton.h>
+#include <pdaaal/Solver.h>
 
 namespace po = boost::program_options;
 using namespace pdaaal;
 
 
-TypedPDA<char> generate_pda(size_t num_states, size_t num_labels, size_t num_rules, std::ostream& debug) {
+TypedPDA<char> generate_pda(size_t num_states, size_t num_labels, size_t num_rules, std::mt19937& random_gen, std::ostream& debug) {
     if (num_labels > 26) {
         throw std::logic_error("Too many labels specified. Change type in implementation, if you need this.");
     }
@@ -77,28 +77,30 @@ TypedPDA<char> generate_pda(size_t num_states, size_t num_labels, size_t num_rul
         return rule_num;
     };
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
     std::uniform_int_distribution<size_t> distrib(0, all_rules-1);
     for (size_t i = 0; i < num_rules; ++i) {
-        debug << add_rule(distrib(gen)) << std::endl;
+        debug << add_rule(distrib(random_gen)) << std::endl;
     }
     return pda;
 }
 
-PAutomaton<> generate_pautomaton(const TypedPDA<char>& pda, size_t num_extra_states, size_t num_transitions, std::ostream& debug) {
+PAutomaton<> generate_pautomaton(const TypedPDA<char>& pda, size_t num_extra_states, size_t num_transitions, std::mt19937& random_gen, std::ostream& debug) {
     size_t num_states = pda.states().size();
     size_t num_labels = pda.number_of_labels();
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<size_t> accept_distrib(0, 3);
+
+    // TODO: Which parameters to use for randomly selecting accepting states.
+    std::uniform_int_distribution<size_t> accept_init_distrib(0, 10);
+    std::uniform_int_distribution<size_t> accept_extra_distrib(0, 3);
 
     std::vector<size_t> initially_accepting_states;
-    // TODO: Randomly generate initially_accepting_states
+    for (size_t i = 0; i < num_states; ++i) {
+        if (accept_init_distrib(random_gen) == 0) {
+            initially_accepting_states.push_back(i);
+        }
+    }
     pdaaal::PAutomaton<> automaton(pda, initially_accepting_states, true);
-
     for (size_t i = 0; i < num_extra_states; ++i) {
-        bool accepting = accept_distrib(gen) == 0; // TODO: Which of extra_states should be accepting???
+        bool accepting = accept_extra_distrib(random_gen) == 0;
         automaton.add_state(false, accepting);
     }
 
@@ -115,7 +117,7 @@ PAutomaton<> generate_pautomaton(const TypedPDA<char>& pda, size_t num_extra_sta
 
     std::uniform_int_distribution<size_t> distrib(0, all_transitions-1);
     for (size_t i = 0; i < num_transitions; ++i) {
-        debug << add_transition(distrib(gen)) << std::endl;
+        debug << add_transition(distrib(random_gen)) << std::endl;
     }
     return automaton;
 }
@@ -145,8 +147,9 @@ void print_rules(std::ostream& out, const TypedPDA<char>& pda) {
     out << "Count rules: " << rules.size() << std::endl;
 }
 
-template <typename T, typename Fn = std::function<T(T)>>
-std::ostream& print_list(std::ostream& out, const std::string& prefix, const std::string& separator, std::vector<T> list, Fn&& map = [](const T& t){ return t; }) {
+template <typename T, typename Fn = std::function<void(std::ostream&,const T&)>>
+std::ostream& print_list(std::ostream& out, std::vector<T> list, const std::string& separator = "", const std::string& prefix = "", Fn&& print = [](std::ostream& s, const T& t){ s << t; }) {
+    static_assert(true);
     bool first = true;
     for (const auto& elem : list) {
         if (first) {
@@ -154,7 +157,8 @@ std::ostream& print_list(std::ostream& out, const std::string& prefix, const std
         } else {
             out << separator;
         }
-        out << prefix << map(elem);
+        out << prefix;
+        print(out,elem);
     }
     return out;
 }
@@ -207,15 +211,10 @@ std::ostream& print_automaton(std::ostream& out, const std::string& name, const 
         << "  \"" << name << " = {" << std::endl;
     bool first = true;
     std::vector<size_t> accepting_states;
-    std::vector<size_t> accepting_extra_states;
     for (const auto& state : automaton.states()) {
         auto from = state->_id;
         if (state->_accepting) {
-            if (from < pda.states().size()) {
-                accepting_states.push_back(from);
-            } else {
-                accepting_extra_states.push_back(from);
-            }
+            accepting_states.push_back(from);
         }
         for (const auto& [to, labels] : state->_edges) {
             for (const auto& label : labels) {
@@ -231,14 +230,12 @@ std::ostream& print_automaton(std::ostream& out, const std::string& name, const 
         }
     }
     out << "}\"" << std::endl
-        << "definition " << name << "_F_ctr_loc where \"" << name << "_F_ctr_loc = {";
-    print_list(out, "p", ",", accepting_states) << "}\"" << std::endl
-        << "definition " << name << "_F_ctr_loc_st where \"" << name << "_F_ctr_loc_st = {";
-    print_list(out, "q", ",", accepting_extra_states) << "}\"" << std::endl;
+        << "definition " << name << "_F where \"" << name << "_F = {";
+    print_list(out, accepting_states, ", ", "", [&automaton](std::ostream& s, size_t state){ print_automaton_state(s, state, automaton); }) << "}\"" << std::endl;
     return out;
 }
 
-void print_to_isabelle(std::ostream& out, const TypedPDA<char>& pda, const PAutomaton<>& initial_automaton, const PAutomaton<>& final_automaton) {
+void print_query_to_isabelle(std::ostream& out, const TypedPDA<char>& pda, const PAutomaton<>& initial_automaton, const PAutomaton<>& final_automaton) {
     size_t num_states = pda.states().size();
     size_t num_labels = pda.number_of_labels();
     std::vector<size_t> states(num_states);
@@ -266,17 +263,17 @@ void print_to_isabelle(std::ostream& out, const TypedPDA<char>& pda, const PAuto
         << std::endl
         << "(* List all control locations (in PDS), labels, and non-initial states in both P-automata *)" << std::endl
         << "datatype ctr_loc = ";
-    print_list(out, "p", " | ", states) << std::endl;
+    print_list(out, states, " | ", "p") << std::endl;
     out << "definition ctr_loc_list where \"ctr_loc_list = [";
-    print_list(out, "p", ",", states) << "]\"" << std::endl;
+    print_list(out, states, ",", "p") << "]\"" << std::endl;
     out << "datatype label = ";
-    print_list(out, "", " | ", labels) << std::endl;
+    print_list(out, labels, " | ") << std::endl;
     out << "definition label_list where \"label_list = [";
-    print_list(out, "", ",", labels) << "]\"" << std::endl;
+    print_list(out, labels, ",") << "]\"" << std::endl;
     out << "datatype state = ";
-    print_list(out, "q", " | ", extra_states) << std::endl;
+    print_list(out, extra_states, " | ", "q") << std::endl;
     out << "definition state_list where \"state_list = [";
-    print_list(out, "q", ",", extra_states) << "]\"" << std::endl;
+    print_list(out, extra_states, ",", "q") << "]\"" << std::endl;
     out << std::endl
         << "(* Define rules of PDS, and the two P-automata *)" << std::endl;
     print_rules(out, "pds_rules", pda);
@@ -286,19 +283,45 @@ void print_to_isabelle(std::ostream& out, const TypedPDA<char>& pda, const PAuto
         << "(* Query specific part END *)" << std::endl;
 }
 
-void generate(std::ostream& out, bool debug_info = false) {
-    out << "Test Generate" << std::endl;
-    std::stringstream dummy;
+void print_lemma(std::ostream& out, bool answer) {
+    out << "lemma \"Intersection_P_Automaton.inters_non_empty initial_automaton initial_automaton_F pds.P_states (pre_star pds_rules final_automaton) final_automaton_F = " << (answer ? "True" : "False") << "\" by eval";
+}
+
+void generate(std::ostream& out, std::mt19937& random_gen, bool debug_info
 #ifndef NDEBUG
-    debug_info = true;
+        = true
+#else
+        = false
 #endif
-    auto pda = generate_pda(4, 5, 20, debug_info ? out : dummy);
+        ) {
+    std::stringstream dummy;
+    auto pda = generate_pda(4, 5, 20, random_gen, debug_info ? out : dummy);
     print_rules(out, pda);
 
-    auto initial_automaton = generate_pautomaton(pda, 3, 8, debug_info ? out : dummy);
-    auto final_automaton = generate_pautomaton(pda, 2, 5, debug_info ? out : dummy);
+    auto initial_automaton = generate_pautomaton(pda, 3, 8, random_gen, debug_info ? out : dummy);
+    auto final_automaton = generate_pautomaton(pda, 2, 5, random_gen, debug_info ? out : dummy);
 
-    print_to_isabelle(out, pda, initial_automaton, final_automaton);
+    print_query_to_isabelle(out, pda, initial_automaton, final_automaton);
+
+    size_t count_p = 0, count_n = 0, count_already_intersecting = 0;
+
+    auto copy_initial = initial_automaton; auto copy_final = final_automaton;
+    PAutomatonProduct copy_instance(pda, std::move(copy_initial), std::move(copy_final));
+
+    PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
+    bool answer = Solver::pre_star_accepts(instance);
+    print_lemma(out, answer);
+
+    if (answer) {
+        count_p++;
+    } else {
+        count_n++;
+    }
+    copy_instance.enable_pre_star();
+    if (copy_instance.initialize_product()) {
+        count_already_intersecting++;
+    }
+
 }
 
 int main(int argc, const char** argv) {
@@ -308,8 +331,12 @@ int main(int argc, const char** argv) {
             ("help,h", "produce help message");
 //            ("version,v", "print version");
 
+    po::options_description input("Input Options");
     po::options_description output("Output Options");
-
+    size_t seed = std::random_device()(); // Default to a random seed. Overwritten if -s option is set.
+    input.add_options()
+            ("seed,s", po::value<size_t>(&seed), "Seed for random number generator (use a random_device if not set)")
+            ;
 //    bool no_parser_warnings = false;
 //    bool silent = false;
     std::string output_file;
@@ -318,6 +345,7 @@ int main(int argc, const char** argv) {
 //            ("silent,s", po::bool_switch(&silent), "Disables non-essential output (implies -W).")
             ("output,o", po::value<std::string>(&output_file), "Output file (default is standard out).")
             ;
+    opts.add(input);
     opts.add(output);
 
     po::variables_map vm;
@@ -328,8 +356,11 @@ int main(int argc, const char** argv) {
         std::cout << opts << std::endl;
         return 1;
     }
+
+    std::mt19937 random_gen(seed);
+
     if (output_file.empty() || output_file == "-") {
-        generate(std::cout);
+        generate(std::cout, random_gen);
     } else {
         std::ofstream out_stream(output_file);
         if (!out_stream.is_open()) {
@@ -337,7 +368,7 @@ int main(int argc, const char** argv) {
             es << "error: Could not open file: " << output_file << std::endl;
             throw std::runtime_error(es.str());
         }
-        generate(out_stream);
+        generate(out_stream, random_gen);
     }
 
     return 0;
