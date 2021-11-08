@@ -199,12 +199,12 @@ void generate_many(std::mt19937& random_gen) {
     // Variables for statistics
     size_t count_p = 0, count_n = 0, count_already_intersecting = 0;
 
-    for (size_t i = 0; i < 1000; ++i) {
+    for (size_t i = 0; i < 15000; ++i) {
         // Generate
-        auto pda = generate_pda(4, 5, 20, random_gen, dummy);
-        auto initial_automaton = generate_pautomaton(pda, 3, 8, random_gen, dummy);
-        auto final_automaton = generate_pautomaton(pda, 2, 5, random_gen, dummy);
-        
+        auto pda = generate_pda(4, 5, i%100, random_gen, dummy);
+        auto initial_automaton = generate_pautomaton(pda, 3, i%13, random_gen, dummy);
+        auto final_automaton = generate_pautomaton(pda, 2, i%11, random_gen, dummy);
+
         bool answer = solve(pda, initial_automaton, final_automaton);
 
         // Get statistics
