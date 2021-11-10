@@ -72,9 +72,17 @@ void IsabellePrettyPrinter::print_query(const TypedPDA<char>& pda, const PAutoma
          << std::endl
          << "(* List all control locations (in PDS), labels, and non-initial states in both P-automata *)" << std::endl
          << "datatype ctr_loc = ";
-    print_list(_out, states, " | ", "p") << std::endl;
+    if (states.empty()) {
+        _out << "p" << std::endl;
+    } else {
+        print_list(_out, states, " | ", "p") << std::endl;
+    }
     _out << "definition ctr_loc_list where \"ctr_loc_list = [";
-    print_list(_out, states, ",", "p") << "]\"" << std::endl;
+    if (states.empty()) {
+        _out << "p" << "]\"" << std::endl;
+    } else {
+        print_list(_out, states, ",", "p") << "]\"" << std::endl;
+    }
     _out << "datatype label = ";
     print_list(_out, labels, " | ") << std::endl;
     _out << "definition label_list where \"label_list = [";
@@ -93,10 +101,15 @@ void IsabellePrettyPrinter::print_query(const TypedPDA<char>& pda, const PAutoma
 }
 
 std::ostream& IsabellePrettyPrinter::print_rules(const std::string& name, const TypedPDA<char>& pda){
-    _out << "definition " << name << " :: \"(ctr_loc, label) rule set\" where" << std::endl
-         << "  \"" << name << " = {" << std::endl;
+    auto rules = pda.all_rules();
+    _out << "definition " << name << " :: \"(ctr_loc, label) rule set\" where" << std::endl;
+    if (rules.empty()) {
+        _out << "  \"" << name << " = {}\"" << std::endl;
+        return _out;
+    }
+    _out << "  \"" << name << " = {" << std::endl;
     bool first_rule = true;
-    for (const auto& rule : pda.all_rules()) {
+    for (const auto& rule : rules) {
         if (first_rule) {
             first_rule = false;
         } else {
@@ -126,12 +139,13 @@ std::ostream& IsabellePrettyPrinter::print_rules(const std::string& name, const 
     return _out;
 }
 std::ostream& IsabellePrettyPrinter::print_automaton(const std::string& name_prefix, const PAutomaton<>& automaton, const TypedPDA<char>& pda) {
-    _out << "definition " << name_prefix << "_automaton :: \"((ctr_loc, state, label) PDS.state, label) transition set\" where" << std::endl
-         << "  \"" << name_prefix << "_automaton = {" << std::endl;
+    _out << "definition " << name_prefix
+         << "_automaton :: \"((ctr_loc, state, label) PDS.state, label) transition set\" where" << std::endl;
+
     bool first = true;
     std::vector<size_t> accepting_ctr_loc;
     std::vector<size_t> accepting_ctr_loc_st;
-    for (const auto& state : automaton.states()) {
+    for (const auto& state: automaton.states()) {
         auto from = state->_id;
         if (state->_accepting) {
             if (from < automaton.pda().states().size()) {
@@ -140,10 +154,11 @@ std::ostream& IsabellePrettyPrinter::print_automaton(const std::string& name_pre
                 accepting_ctr_loc_st.push_back(from);
             }
         }
-        for (const auto& [to, labels] : state->_edges) {
-            for (const auto& label : labels) {
+        for (const auto&[to, labels]: state->_edges) {
+            for (const auto& label: labels) {
                 if (first) {
                     first = false;
+                    _out << "  \"" << name_prefix << "_automaton = {" << std::endl;
                 } else {
                     _out << "," << std::endl;
                 }
@@ -153,8 +168,12 @@ std::ostream& IsabellePrettyPrinter::print_automaton(const std::string& name_pre
             }
         }
     }
-    _out << "}\"" << std::endl
-         << "definition " << name_prefix << "_ctr_loc where \"" << name_prefix << "_ctr_loc = {";
+    if (first) {
+        _out << "  \"" << name_prefix << "_automaton = {}\"" << std::endl;
+    } else {
+        _out << "}\"" << std::endl;
+    }
+    _out << "definition " << name_prefix << "_ctr_loc where \"" << name_prefix << "_ctr_loc = {";
     print_list(_out, accepting_ctr_loc, ", ", "", [&automaton,this](std::ostream& s, size_t state){ print_automaton_state(state, automaton, false); }) << "}\"" << std::endl;
     _out << "definition " << name_prefix << "_ctr_loc_st where \"" << name_prefix << "_ctr_loc_st = {";
     print_list(_out, accepting_ctr_loc_st, ", ", "", [&automaton,this](std::ostream& s, size_t state){ print_automaton_state(state, automaton, false); }) << "}\"" << std::endl;

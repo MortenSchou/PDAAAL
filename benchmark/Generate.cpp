@@ -248,7 +248,7 @@ int main(int argc, const char** argv) {
     size_t number_of_instances = 1;
     input.add_options()
             ("seed,s", po::value<size_t>(&seed), "Seed for random number generator (use a random_device if not set)")
-            ("n", po::value<size_t>(&number_of_instances), "Number of instances to generate (default=1)")
+            ("instances,n", po::value<size_t>(&number_of_instances), "Number of instances to generate (default=1)")
             ;
 //    bool no_parser_warnings = false;
 //    bool silent = false;
