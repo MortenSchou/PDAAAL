@@ -30,11 +30,13 @@
 #include <string>
 #include <random>
 #include <iostream>
+#include <filesystem>
 #include <boost/program_options.hpp>
 #include <pdaaal/Solver.h>
 
 #include "IsabellePrettyPrinter.h"
 
+namespace fs = std::filesystem;
 namespace po = boost::program_options;
 using namespace pdaaal;
 
@@ -91,8 +93,8 @@ PAutomaton<> generate_pautomaton(const TypedPDA<char>& pda, size_t num_extra_sta
     size_t num_labels = pda.number_of_labels();
 
     // TODO: Which parameters to use for randomly selecting accepting states.
-    std::uniform_int_distribution<size_t> accept_init_distrib(0, 10);
-    std::uniform_int_distribution<size_t> accept_extra_distrib(0, 3);
+    std::uniform_int_distribution<size_t> accept_init_distrib(0, 5);
+    std::uniform_int_distribution<size_t> accept_extra_distrib(0, 2);
 
     std::vector<size_t> initially_accepting_states;
     for (size_t i = 0; i < num_states; ++i) {
@@ -193,19 +195,32 @@ void generate(std::ostream& out, std::mt19937& random_gen, bool debug_info
     if (answer) { count_p++; } else { count_n++; }
 }
 
-void generate_many(std::mt19937& random_gen) {
+void generate_many(std::mt19937& random_gen, fs::path output_dir, size_t number_of_instances) {
     std::stringstream dummy;
 
     // Variables for statistics
     size_t count_p = 0, count_n = 0, count_already_intersecting = 0;
 
-    for (size_t i = 0; i < 15000; ++i) {
+    for (size_t i = 0; i < number_of_instances; ++i) {
+        std::stringstream file_name;
+        file_name << "test" << i << ".thy";
+        auto file_path = output_dir / file_name.str();
+        std::ofstream out_stream(file_path);
+        if (!out_stream.is_open()) {
+            std::stringstream es;
+            es << "error: Could not open file: " << file_path << std::endl;
+            throw std::runtime_error(es.str());
+        }
+
         // Generate
-        auto pda = generate_pda(4, 5, i%100, random_gen, dummy);
+        auto pda = generate_pda(4, 5, i%200, random_gen, dummy);
         auto initial_automaton = generate_pautomaton(pda, 3, i%13, random_gen, dummy);
         auto final_automaton = generate_pautomaton(pda, 2, i%11, random_gen, dummy);
 
-        bool answer = solve(pda, initial_automaton, final_automaton);
+        // Print in Isabelle format (also calculates answer).
+        bool answer = to_isabelle(out_stream, pda, initial_automaton, final_automaton);
+
+        //bool answer = solve(pda, initial_automaton, final_automaton);
 
         // Get statistics
         PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
@@ -230,16 +245,20 @@ int main(int argc, const char** argv) {
     po::options_description input("Input Options");
     po::options_description output("Output Options");
     size_t seed = std::random_device()(); // Default to a random seed. Overwritten if -s option is set.
+    size_t number_of_instances = 1;
     input.add_options()
             ("seed,s", po::value<size_t>(&seed), "Seed for random number generator (use a random_device if not set)")
+            ("n", po::value<size_t>(&number_of_instances), "Number of instances to generate (default=1)")
             ;
 //    bool no_parser_warnings = false;
 //    bool silent = false;
-    std::string output_file;
+//    std::string output_file;
+    std::string output_dir;
     output.add_options()
 //            ("disable-parser-warnings,W", po::bool_switch(&no_parser_warnings), "Disable warnings from parser.")
 //            ("silent,s", po::bool_switch(&silent), "Disables non-essential output (implies -W).")
-            ("output,o", po::value<std::string>(&output_file), "Output file (default is standard out).")
+//            ("output,o", po::value<std::string>(&output_file), "Output file (default is standard out).")
+            ("dir,d", po::value<std::string>(&output_dir), "Output directory to put instance files in.")
             ;
     opts.add(input);
     opts.add(output);
@@ -255,18 +274,28 @@ int main(int argc, const char** argv) {
 
     std::mt19937 random_gen(seed);
 
-    if (output_file.empty() || output_file == "-") {
-//        generate(std::cout, random_gen);
-        generate_many(random_gen);
-    } else {
-        std::ofstream out_stream(output_file);
-        if (!out_stream.is_open()) {
-            std::stringstream es;
-            es << "error: Could not open file: " << output_file << std::endl;
-            throw std::runtime_error(es.str());
-        }
-        generate(out_stream, random_gen);
+    if (output_dir.empty()) {
+        std::cerr << "Please specify an output directory";
+        return 1;
     }
+    fs::path output_dir_path(output_dir);
+    if (!fs::is_directory(output_dir_path)) {
+        std::cerr << "Specified output directory: " << output_dir_path << " is not a valid directory.";
+        return 1;
+    }
+    generate_many(random_gen, output_dir_path, number_of_instances);
+
+//    if (output_file.empty() || output_file == "-") {
+//        generate(std::cout, random_gen);
+//    } else {
+//        std::ofstream out_stream(output_file);
+//        if (!out_stream.is_open()) {
+//            std::stringstream es;
+//            es << "error: Could not open file: " << output_file << std::endl;
+//            throw std::runtime_error(es.str());
+//        }
+//        generate(out_stream, random_gen);
+//    }
 
     return 0;
 }
