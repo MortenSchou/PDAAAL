@@ -349,6 +349,8 @@ void generate_pda_without_symmetries(const fs::path& output_dir) {
             for (size_t rule : rules) {
                 add_rule(rule, pda);
             }
+            std::stringstream name_with_index;
+            name_with_index << "pds_rules_" << count_pdas;
             {
                 std::stringstream file_name;
                 file_name << "pda" << count_pdas << ".thy";
@@ -360,7 +362,7 @@ void generate_pda_without_symmetries(const fs::path& output_dir) {
                     throw std::runtime_error(es.str());
                 }
                 IsabellePrettyPrinter isabelle_pp(out_stream);
-                isabelle_pp.print_rules("pds_rules", pda);
+                isabelle_pp.print_rules(name_with_index.str(), pda);
             }
             {
 //            std::stringstream file_name;
@@ -494,7 +496,8 @@ void generate_pautomata_without_symmetries(const fs::path& output_dir, bool init
                 for (size_t transition : transitions) {
                     add_transition(transition, automaton);
                 }
-
+                std::stringstream name_with_index;
+                name_with_index << name << "_" << count_automata;
                 {
                     std::stringstream file_name;
                     file_name << name << count_automata << ".thy";
@@ -506,7 +509,7 @@ void generate_pautomata_without_symmetries(const fs::path& output_dir, bool init
                         throw std::runtime_error(es.str());
                     }
                     IsabellePrettyPrinter isabelle_pp(out_stream);
-                    isabelle_pp.print_automaton(name, automaton, pda);
+                    isabelle_pp.print_automaton(name_with_index.str(), automaton, pda);
                 }
                 {
 //                    std::stringstream file_name;
