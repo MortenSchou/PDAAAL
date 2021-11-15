@@ -39,7 +39,7 @@ public:
     void print_lemma(bool answer);
     void print_end();
 
-protected:
+//protected:
     std::ostream& print_automaton_state(size_t state, const pdaaal::PAutomaton<>& automaton, bool print_type = true);
     std::ostream& print_rules(const std::string& name, const pdaaal::TypedPDA<char>& pda);
     std::ostream& print_automaton(const std::string& name_prefix, const pdaaal::PAutomaton<>& automaton, const pdaaal::TypedPDA<char>& pda);
