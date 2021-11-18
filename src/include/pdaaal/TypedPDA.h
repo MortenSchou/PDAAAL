@@ -37,6 +37,7 @@
 #include <set>
 #include <cassert>
 #include <iostream>
+#include <sstream>
 
 #include <nlohmann/json.hpp>
 

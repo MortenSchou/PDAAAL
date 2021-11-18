@@ -96,6 +96,13 @@ namespace pdaaal {
     private:
         const typed_pda_t& _typed_pda;
     };
+    // CTAD guides
+    template<typename label_t, typename W, typename state_t, bool skip_state_mapping, bool indirect = true>
+    TypedPAutomaton(const TypedPDA<label_t,W,fut::type::vector,state_t,skip_state_mapping>&, const NFA<label_t>&, const std::vector<size_t>&) -> TypedPAutomaton<label_t,W,state_t,skip_state_mapping,indirect>;
+    template<typename label_t, typename W, typename state_t, bool skip_state_mapping, bool indirect = true>
+    TypedPAutomaton(const TypedPDA<label_t,W,fut::type::vector,state_t,skip_state_mapping>&, const NFA<uint32_t>&, const std::vector<size_t>&) -> TypedPAutomaton<label_t,W,state_t,skip_state_mapping,indirect>;
+    template<typename label_t, typename W, typename state_t, bool skip_state_mapping, bool indirect = true>
+    TypedPAutomaton(const TypedPDA<label_t,W,fut::type::vector,state_t,skip_state_mapping>&, const std::vector<size_t>&, bool special_accepting = true) -> TypedPAutomaton<label_t,W,state_t,skip_state_mapping,indirect>;
 
     class PAutomatonJsonParser {
     public:

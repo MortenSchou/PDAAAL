@@ -33,6 +33,7 @@
 #include <filesystem>
 #include <boost/program_options.hpp>
 #include <pdaaal/Solver.h>
+#include <pdaaal/TypedPAutomaton.h>
 
 #include "IsabellePrettyPrinter.h"
 
@@ -365,16 +366,16 @@ void generate_pda_without_symmetries(const fs::path& output_dir) {
                 isabelle_pp.print_rules(name_with_index.str(), pda);
             }
             {
-//            std::stringstream file_name;
-//            file_name << "pda" << i << ".json";
-//            auto file_path = output_dir / file_name.str();
-//            std::ofstream out_stream(file_path);
-//            if (!out_stream.is_open()) {
-//                std::stringstream es;
-//                es << "error: Could not open file: " << file_path << std::endl;
-//                throw std::runtime_error(es.str());
-//            }
-//            // TODO:   pda.print_json(out_stream);
+                std::stringstream file_name;
+                file_name << "pda" << count_pdas << ".json";
+                auto file_path = output_dir / file_name.str();
+                std::ofstream out_stream(file_path);
+                if (!out_stream.is_open()) {
+                    std::stringstream es;
+                    es << "error: Could not open file: " << file_path << std::endl;
+                    throw std::runtime_error(es.str());
+                }
+                out_stream << pda.to_json().dump() << std::endl;
             }
 //            pdas.emplace_back(std::move(pda));
             count_pdas++;
@@ -482,7 +483,7 @@ void generate_pautomata_without_symmetries(const fs::path& output_dir, bool init
                         initially_accepting_states.push_back(pautomaton_state);
                     }
                 }
-                pdaaal::PAutomaton<> automaton(pda, initially_accepting_states, true);
+                pdaaal::TypedPAutomaton automaton(pda, initially_accepting_states, true);
                 bool skip = false;
                 for (; pautomaton_state < num_states + num_extra_states; ++pautomaton_state) {
                     bool accepting = (accept_mask & (1 << pautomaton_state)) != 0;
@@ -512,16 +513,16 @@ void generate_pautomata_without_symmetries(const fs::path& output_dir, bool init
                     isabelle_pp.print_automaton(name_with_index.str(), automaton, pda);
                 }
                 {
-//                    std::stringstream file_name;
-//                    file_name << name << i << ".json";
-//                    auto file_path = output_dir / file_name.str();
-//                    std::ofstream out_stream(file_path);
-//                    if (!out_stream.is_open()) {
-//                        std::stringstream es;
-//                        es << "error: Could not open file: " << file_path << std::endl;
-//                        throw std::runtime_error(es.str());
-//                    }
-//                    automaton.print_json(out_stream);
+                    std::stringstream file_name;
+                    file_name << name << count_automata << ".json";
+                    auto file_path = output_dir / file_name.str();
+                    std::ofstream out_stream(file_path);
+                    if (!out_stream.is_open()) {
+                        std::stringstream es;
+                        es << "error: Could not open file: " << file_path << std::endl;
+                        throw std::runtime_error(es.str());
+                    }
+                    out_stream << automaton.to_json().dump() << std::endl;
                 }
 //                automata.emplace_back(std::move(automaton));
                 count_automata++;
