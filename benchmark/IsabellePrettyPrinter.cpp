@@ -44,12 +44,12 @@ std::ostream& print_list(std::ostream& out, std::vector<T> list, const std::stri
     return out;
 }
 
-void IsabellePrettyPrinter::print_query(const TypedPDA<char>& pda, const PAutomaton<>& initial_automaton, const PAutomaton<>& final_automaton) {
+void IsabellePrettyPrinter::print_query(const pda_t& pda, const PAutomaton<>& initial_automaton, const PAutomaton<>& final_automaton) {
     size_t num_states = pda.states().size();
     size_t num_labels = pda.number_of_labels();
     std::vector<size_t> states(num_states);
     std::iota(states.begin(), states.end(), 0);
-    std::vector<char> labels(num_labels);
+    std::vector<std::string> labels(num_labels);
     for (size_t label_id = 0; label_id < num_labels; ++label_id) {
         labels[label_id] = pda.get_symbol(label_id);
     }
@@ -100,7 +100,7 @@ void IsabellePrettyPrinter::print_query(const TypedPDA<char>& pda, const PAutoma
          << std::endl;
 }
 
-std::ostream& IsabellePrettyPrinter::print_rules(const std::string& name, const TypedPDA<char>& pda){
+std::ostream& IsabellePrettyPrinter::print_rules(const std::string& name, const pda_t& pda){
     auto rules = pda.all_rules();
     _out << "definition " << name << " :: \"(ctr_loc, label) rule set\" where" << std::endl;
     if (rules.empty()) {
@@ -138,7 +138,7 @@ std::ostream& IsabellePrettyPrinter::print_rules(const std::string& name, const 
     _out << "}\"" << std::endl;
     return _out;
 }
-std::ostream& IsabellePrettyPrinter::print_automaton(const std::string& name_prefix, const PAutomaton<>& automaton, const TypedPDA<char>& pda) {
+std::ostream& IsabellePrettyPrinter::print_automaton(const std::string& name_prefix, const PAutomaton<>& automaton, const pda_t& pda) {
     _out << "definition " << name_prefix
          << "_automaton :: \"((ctr_loc, state, label) PDS.state, label) transition set\" where" << std::endl;
 

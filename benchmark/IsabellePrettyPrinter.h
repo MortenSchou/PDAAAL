@@ -31,9 +31,10 @@
 
 class IsabellePrettyPrinter {
 public:
+    using pda_t = pdaaal::TypedPDA<std::string,pdaaal::weight<void>,pdaaal::fut::type::vector,std::string>;
     explicit IsabellePrettyPrinter(std::ostream& out) : _out(out) { };
 
-    void print_query(const pdaaal::TypedPDA<char>& pda, const pdaaal::PAutomaton<>& initial_automaton, const pdaaal::PAutomaton<>& final_automaton);
+    void print_query(const pda_t& pda, const pdaaal::PAutomaton<>& initial_automaton, const pdaaal::PAutomaton<>& final_automaton);
     void print_begin();
     void print_proofs();
     void print_lemma(bool answer);
@@ -41,8 +42,8 @@ public:
 
 //protected:
     std::ostream& print_automaton_state(size_t state, const pdaaal::PAutomaton<>& automaton, bool print_type = true);
-    std::ostream& print_rules(const std::string& name, const pdaaal::TypedPDA<char>& pda);
-    std::ostream& print_automaton(const std::string& name_prefix, const pdaaal::PAutomaton<>& automaton, const pdaaal::TypedPDA<char>& pda);
+    std::ostream& print_rules(const std::string& name, const pda_t& pda);
+    std::ostream& print_automaton(const std::string& name_prefix, const pdaaal::PAutomaton<>& automaton, const pda_t& pda);
 
 private:
     std::ostream& _out;

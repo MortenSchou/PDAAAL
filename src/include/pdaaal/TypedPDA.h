@@ -50,6 +50,9 @@ namespace pdaaal {
             assert(id < _state_map.size());
             return _state_map.at(id);
         }
+        [[nodiscard]] size_t state_map_size() const {
+            return _state_map.size();
+        }
     protected:
         utils::ptrie_set<state_t> _state_map;
     };
@@ -408,6 +411,12 @@ namespace pdaaal {
             std::stringstream ss;
             ss << pda.get_state(state_i);
             j_states[ss.str()] = j_state;
+            ++state_i;
+        }
+        while (state_i < pda.state_map_size()) {
+            std::stringstream ss;
+            ss << pda.get_state(state_i);
+            j_states[ss.str()] = json::object();
             ++state_i;
         }
         j["states"] = j_states;

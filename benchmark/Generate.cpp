@@ -41,16 +41,18 @@ namespace fs = std::filesystem;
 namespace po = boost::program_options;
 using namespace pdaaal;
 
+using generated_pda_t = IsabellePrettyPrinter::pda_t;
 
-TypedPDA<char> generate_pda(size_t num_states, size_t num_labels, size_t num_rules, std::mt19937& random_gen, std::ostream& debug) {
-    if (num_labels > 26) {
-        throw std::logic_error("Too many labels specified. Change type in implementation, if you need this.");
+generated_pda_t generate_pda(size_t num_states, size_t num_labels, size_t num_rules, std::mt19937& random_gen, std::ostream& debug) {
+    std::string alphabet = "ABCDEFGHIJKLMNOPQRSTUVXYZ";
+    if (num_labels >= alphabet.size()) {
+        throw std::logic_error("Too many labels specified. Change implementation, if you need this.");
     }
-    pdaaal::TypedPDA<char> pda;
-    std::vector<char> labels;
+    generated_pda_t pda;
+    std::vector<std::string> labels;
     labels.reserve(num_labels);
     for (size_t i = 0; i < num_labels; ++i) {
-        char lbl = 'A' + i;
+        std::string lbl = alphabet.substr(i,1);
         pda.insert_label(lbl);
         labels.push_back(lbl);
     }
@@ -69,7 +71,7 @@ TypedPDA<char> generate_pda(size_t num_states, size_t num_labels, size_t num_rul
         assert(from < num_states);
         assert(to < num_states);
         if (op_num == 0) {
-            pda.add_rule(from, to, POP, '*', labels[pre]);
+            pda.add_rule(from, to, POP, "", labels[pre]);
         } else {
             auto op = (op_num - 1) % 2 == 0 ? SWAP : PUSH;
             auto op_label = (op_num - 1) / 2;
@@ -89,7 +91,7 @@ TypedPDA<char> generate_pda(size_t num_states, size_t num_labels, size_t num_rul
     return pda;
 }
 
-PAutomaton<> generate_pautomaton(const TypedPDA<char>& pda, size_t num_extra_states, size_t num_transitions, std::mt19937& random_gen, std::ostream& debug) {
+PAutomaton<> generate_pautomaton(const generated_pda_t& pda, size_t num_extra_states, size_t num_transitions, std::mt19937& random_gen, std::ostream& debug) {
     size_t num_states = pda.states().size();
     size_t num_labels = pda.number_of_labels();
 
@@ -152,7 +154,7 @@ void print_rules_simple(std::ostream& out, const TypedPDA<char>& pda) {
     out << "Count rules: " << rules.size() << std::endl;
 }
 
-bool to_isabelle(std::ostream& out, const TypedPDA<char>& pda, PAutomaton<> initial_automaton, PAutomaton<> final_automaton) {
+bool to_isabelle(std::ostream& out, const generated_pda_t& pda, PAutomaton<> initial_automaton, PAutomaton<> final_automaton) {
     IsabellePrettyPrinter isabelle_pp(out);
     isabelle_pp.print_begin();
     isabelle_pp.print_query(pda, initial_automaton, final_automaton);
@@ -163,7 +165,7 @@ bool to_isabelle(std::ostream& out, const TypedPDA<char>& pda, PAutomaton<> init
     isabelle_pp.print_end();
     return answer;
 }
-bool solve(const TypedPDA<char>& pda, PAutomaton<> initial_automaton, PAutomaton<> final_automaton) {
+bool solve(const generated_pda_t& pda, PAutomaton<> initial_automaton, PAutomaton<> final_automaton) {
     PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
     bool answer = Solver::pre_star_accepts(instance);
     return answer;
@@ -239,15 +241,16 @@ void generate_pda_without_symmetries(const fs::path& output_dir) {
     // Parameters:
     size_t num_states = 2;
     size_t num_labels = 2;
+    std::string alphabet = "ABCDEFGHIJKLMNOPQRSTUVXYZ";
     bool do_reduction = true;
 
     // Initialize:
     if (num_labels > 26) { throw std::logic_error("Too many labels specified. Change type in implementation, if you need this."); }
-    std::vector<char> labels;
-    std::unordered_set<char> all_labels;
+    std::vector<std::string> labels;
+    std::unordered_set<std::string> all_labels;
     labels.reserve(num_labels);
     for (size_t i = 0; i < num_labels; ++i) {
-        char lbl = 'A' + i;
+        std::string lbl = alphabet.substr(i,1);
         labels.push_back(lbl);
         all_labels.emplace(lbl);
     }
@@ -285,12 +288,12 @@ void generate_pda_without_symmetries(const fs::path& output_dir) {
         }
         return ((from * num_states + to) * num_labels + pre) * num_ops + op_num;
     };
-    auto add_rule = [&labels,&seed_to_rule](size_t seed, TypedPDA<char>& pda){
+    auto add_rule = [&labels,&seed_to_rule](size_t seed, generated_pda_t& pda){
         auto [from, to, op, op_label, pre] = seed_to_rule(seed);
         if (op == SWAP && op_label && op_label.value() == pre) {
             op = NOOP;
         }
-        pda.add_rule(from, to, op, op_label ? labels[op_label.value()] : '*', labels[pre]);
+        pda.add_rule(from, to, op, op_label ? labels[op_label.value()] : "", labels[pre]);
     };
     for (size_t i = 0; i < all_rules; ++i) {
         auto [from, to, op, op_label, pre] = seed_to_rule(i);
@@ -346,7 +349,9 @@ void generate_pda_without_symmetries(const fs::path& output_dir) {
                 pda_set.emplace(rules);
             }
 
-            TypedPDA<char> pda(all_labels);
+            generated_pda_t pda(all_labels);
+            pda.insert_state("p0");
+            pda.insert_state("p1");
             for (size_t rule : rules) {
                 add_rule(rule, pda);
             }
@@ -386,10 +391,12 @@ void generate_pda_without_symmetries(const fs::path& output_dir) {
 }
 
 void generate_pautomata_without_symmetries(const fs::path& output_dir, bool initial) {
-    pdaaal::TypedPDA<char> pda;
-    pda.insert_label('A');
-    pda.insert_label('B');
-    pda.add_rule(0, 1, POP, '*', 'A'); // We just need to have two labels and two states for now.
+    generated_pda_t pda;
+    pda.insert_label("A");
+    pda.insert_label("B");
+    pda.insert_state("p0");
+    pda.insert_state("p1");
+    pda.add_rule(0, 1, POP, "", "A"); // We just need to have two labels and two states for now.
     assert(pda.states().size() == 2);
     assert(pda.number_of_labels() == 2);
 
@@ -484,6 +491,8 @@ void generate_pautomata_without_symmetries(const fs::path& output_dir, bool init
                     }
                 }
                 pdaaal::TypedPAutomaton automaton(pda, initially_accepting_states, true);
+                automaton.insert_state("q2");
+                automaton.insert_state("q3");
                 bool skip = false;
                 for (; pautomaton_state < num_states + num_extra_states; ++pautomaton_state) {
                     bool accepting = (accept_mask & (1 << pautomaton_state)) != 0;
