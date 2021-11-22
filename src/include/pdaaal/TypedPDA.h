@@ -195,11 +195,14 @@ namespace pdaaal {
             return _label_map.insert(label).second;
         }
         size_t insert_state(const state_t& state) {
+            size_t id;
             if constexpr (skip_state_mapping) {
-                return state;
+                id = state;
             } else {
-                return this->_state_map.insert(state).second;
+                id = this->_state_map.insert(state).second;
             }
+            this->add_state(id);
+            return id;
         }
         void add_rule_detail(size_t from, typename PDA<W>::rule_t r, bool negated, const std::vector<uint32_t>& pre) {
             this->add_untyped_rule_impl(from, r, negated, pre);
