@@ -31,28 +31,68 @@
 #include <boost/program_options.hpp>
 #include <pdaaal/Solver.h>
 #include <pdaaal/TypedPAutomaton.h>
+#include "IsabellePrettyPrinter.h"
 #include "../src/pdaaal-bin/parsing/PdaJsonParser.h"
 
 namespace fs = std::filesystem;
 namespace po = boost::program_options;
 using namespace pdaaal;
 
-using pda_t = PdaaalSAXHandler<weight<void>,true>::pda_t;
-
+//using pda_t = PdaaalSAXHandler<weight<void>,true>::pda_t;
+template <typename pda_t>
 bool solve_pre(const pda_t& pda, PAutomaton<> initial_automaton, PAutomaton<> final_automaton) {
     PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
     bool answer = Solver::pre_star_accepts(instance);
     return answer;
 }
+template <typename pda_t>
 bool solve_post(const pda_t& pda, PAutomaton<> initial_automaton, PAutomaton<> final_automaton) {
     PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
     bool answer = Solver::post_star_accepts(instance);
     return answer;
 }
+template <typename pda_t>
 bool solve_dual(const pda_t& pda, PAutomaton<> initial_automaton, PAutomaton<> final_automaton) {
     PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
     bool answer = Solver::dual_search_accepts(instance);
     return answer;
+}
+
+void print_lemmas(bool answer_pre, bool answer_post, bool answer_dual, const std::string& lemma_name,
+                  const std::string& pda_name, const std::string& initial_name, const std::string& final_name) {
+    std::stringstream lemma_content;
+    lemma_content << "  \"check " << pda_name << " " << initial_name << "_automaton " << initial_name << "_ctr_loc " << initial_name << "_ctr_loc_st" << std::endl
+                  << "                   " << final_name << "_automaton " << final_name << "_ctr_loc " << final_name << "_ctr_loc_st = Some ";
+    if (answer_pre == answer_post) {
+        if (answer_pre == answer_dual) {
+            std::cout << "lemma " << lemma_name << ":" << std::endl
+                      << lemma_content.str() << (answer_pre ? "True" : "False") << "\"" << std::endl
+                      << "  by eval" << std::endl;
+        } else {
+            std::cout << "lemma " << lemma_name << ":" << std::endl
+                      << lemma_content.str() << (answer_pre ? "True" : "False") << "\"" << std::endl
+                      << "  by eval" << std::endl;
+            std::cout << "lemma " << lemma_name << "dual" << ":" << std::endl
+                      << lemma_content.str() << (answer_dual ? "True" : "False") << "\"" << std::endl
+                      << "  by eval" << std::endl;
+        }
+    } else {
+        if (answer_pre == answer_dual) {
+            std::cout << "lemma " << lemma_name << ":" << std::endl
+                      << lemma_content.str() << (answer_pre ? "True" : "False") << "\"" << std::endl
+                      << "  by eval" << std::endl;
+            std::cout << "lemma " << lemma_name << "post" << ":" << std::endl
+                      << lemma_content.str() << (answer_post ? "True" : "False") << "\"" << std::endl
+                      << "  by eval" << std::endl;
+        } else {
+            std::cout << "lemma " << lemma_name << ":" << std::endl
+                      << lemma_content.str() << (answer_post ? "True" : "False") << "\"" << std::endl
+                      << "  by eval" << std::endl;
+            std::cout << "lemma " << lemma_name << "pre" << ":" << std::endl
+                      << lemma_content.str() << (answer_pre ? "True" : "False") << "\"" << std::endl
+                      << "  by eval" << std::endl;
+        }
+    }
 }
 
 int main(int argc, const char** argv) {
@@ -67,11 +107,13 @@ int main(int argc, const char** argv) {
     size_t initial_id = 0;
     size_t final_id = 0;
     std::string input_dir;
+    bool output_full_isabelle_file;
     input.add_options()
             ("pds,p", po::value<size_t>(&pds_id), "Index of pushdown")
             ("initial,i", po::value<size_t>(&initial_id), "Index of initial P-automaton")
             ("final,f", po::value<size_t>(&final_id), "Index of final P-automaton")
             ("dir,d", po::value<std::string>(&input_dir), "Input directory to read files from.")
+            ("full", po::bool_switch(&output_full_isabelle_file), "Output the full Isabelle theory file content.")
             ;
 //    std::string output_dir;
 //    output.add_options()
@@ -118,63 +160,49 @@ int main(int argc, const char** argv) {
         es << "error: Could not open pda-file: " << pda_file_path << std::endl;
         throw std::runtime_error(es.str());
     }
-    std::stringstream dummy;
-    auto pda = PdaJSONParser::parse<weight<void>,true>(pda_stream, dummy);
-
     std::ifstream initial_stream(initial_file_path);
     if (!initial_stream.is_open()) {
         std::stringstream es;
         es << "error: Could not open file: " << initial_file_path << std::endl;
         throw std::runtime_error(es.str());
     }
-    auto initial_automaton = PAutomatonJsonParser::parse(initial_stream, pda);
     std::ifstream final_stream(final_file_path);
     if (!final_stream.is_open()) {
         std::stringstream es;
         es << "error: Could not open file: " << final_file_path << std::endl;
         throw std::runtime_error(es.str());
     }
-    auto final_automaton = PAutomatonJsonParser::parse(final_stream, pda);
+    std::stringstream dummy;
 
-    bool answer_pre = solve_pre(pda, initial_automaton, final_automaton);
-    bool answer_post = solve_post(pda, initial_automaton, final_automaton);
-    bool answer_dual = solve_dual(pda, initial_automaton, final_automaton);
+    if (output_full_isabelle_file) {
+        auto pda = PdaJSONParser::parse<weight<void>,false>(pda_stream, dummy);
+        auto initial_automaton = PAutomatonJsonParser::parse(initial_stream, pda);
+        auto final_automaton = PAutomatonJsonParser::parse(final_stream, pda);
 
-    std::stringstream lemma_name;
-    lemma_name << "p" << pds_id << "i" << initial_id << "f" << final_id;
-    std::stringstream lemma_content;
-    lemma_content << "  \"check pds_rules_" << pds_id << " initial_" << initial_id << "_automaton initial_" << initial_id << "_ctr_loc initial_" << initial_id << "_ctr_loc_st" << std::endl
-                  << "                   final_" << final_id << "_automaton final_" << final_id << "_ctr_loc final_" << final_id << "_ctr_loc_st = Some ";
+        bool answer_pre = solve_pre(pda, initial_automaton, final_automaton);
+        bool answer_post = solve_post(pda, initial_automaton, final_automaton);
+        bool answer_dual = solve_dual(pda, initial_automaton, final_automaton);
 
-    if (answer_pre == answer_post) {
-        if (answer_pre == answer_dual) {
-            std::cout << "lemma " << lemma_name.str() << ":" << std::endl
-                      << lemma_content.str() << (answer_pre ? "True" : "False") << "\"" << std::endl
-                      << "  by eval" << std::endl;
-        } else {
-            std::cout << "lemma " << lemma_name.str() << ":" << std::endl
-                      << lemma_content.str() << (answer_pre ? "True" : "False") << "\"" << std::endl
-                      << "  by eval" << std::endl;
-            std::cout << "lemma " << lemma_name.str() << "dual" << ":" << std::endl
-                      << lemma_content.str() << (answer_dual ? "True" : "False") << "\"" << std::endl
-                      << "  by eval" << std::endl;
-        }
+        IsabellePrettyPrinter isabelle_pp(std::cout);
+        isabelle_pp.print_begin();
+        isabelle_pp.print_query(pda, initial_automaton, final_automaton, "l");
+        isabelle_pp.print_proofs();
+        print_lemmas(answer_pre, answer_post, answer_dual, "correctness_check", "pds_rules", "initial", "final");
+        isabelle_pp.print_end();
     } else {
-        if (answer_pre == answer_dual) {
-            std::cout << "lemma " << lemma_name.str() << ":" << std::endl
-                      << lemma_content.str() << (answer_pre ? "True" : "False") << "\"" << std::endl
-                      << "  by eval" << std::endl;
-            std::cout << "lemma " << lemma_name.str() << "post" << ":" << std::endl
-                      << lemma_content.str() << (answer_post ? "True" : "False") << "\"" << std::endl
-                      << "  by eval" << std::endl;
-        } else {
-            std::cout << "lemma " << lemma_name.str() << ":" << std::endl
-                      << lemma_content.str() << (answer_post ? "True" : "False") << "\"" << std::endl
-                      << "  by eval" << std::endl;
-            std::cout << "lemma " << lemma_name.str() << "pre" << ":" << std::endl
-                      << lemma_content.str() << (answer_pre ? "True" : "False") << "\"" << std::endl
-                      << "  by eval" << std::endl;
-        }
+        auto pda = PdaJSONParser::parse<weight<void>,true>(pda_stream, dummy);
+        auto initial_automaton = PAutomatonJsonParser::parse(initial_stream, pda);
+        auto final_automaton = PAutomatonJsonParser::parse(final_stream, pda);
+
+        bool answer_pre = solve_pre(pda, initial_automaton, final_automaton);
+        bool answer_post = solve_post(pda, initial_automaton, final_automaton);
+        bool answer_dual = solve_dual(pda, initial_automaton, final_automaton);
+
+        std::stringstream lemma_name; lemma_name << "p" << pds_id << "i" << initial_id << "f" << final_id;
+        std::stringstream pds_name; pds_name << "pds_rules_" << pds_id;
+        std::stringstream initial_name; initial_name << "initial_" << initial_id;
+        std::stringstream final_name; initial_name << "final_" << initial_id;
+        print_lemmas(answer_pre, answer_post, answer_dual, lemma_name.str(), pds_name.str(), initial_name.str(), final_name.str());
     }
 
     return 0;

@@ -186,7 +186,14 @@ namespace pdaaal {
             iterate_states([&state_to_id,&automaton,&state_mapping,&pda](const state_t& state, const json& j_state){
                 size_t from = state_to_id(state);
                 for (const auto& edge : j_state["edges"]) {
-                    size_t to = state_to_id(state_mapping(edge["to"].get<std::string>()));
+                    size_t to;
+                    if constexpr (skip_state_mapping) {
+                        assert(edge["to"].is_number_unsigned());
+                        to = state_to_id(edge["to"].get<size_t>());
+                    } else {
+                        assert(edge["to"].is_string());
+                        to = state_to_id(state_mapping(edge["to"].get<std::string>()));
+                    }
                     auto label_string = edge["label"].get<std::string>();
                     if (label_string.empty()) {
                         automaton.add_epsilon_edge(from,to);

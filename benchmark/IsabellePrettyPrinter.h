@@ -30,20 +30,228 @@
 #include <pdaaal/PAutomaton.h>
 
 class IsabellePrettyPrinter {
+private:
+    template <typename T, typename Fn = std::function<void(std::ostream&,const T&)>>
+    std::ostream& print_list(std::ostream& out, std::vector<T> list, const std::string& separator = "", const std::string& prefix = "", Fn&& print = [](std::ostream& s, const T& t){ s << t; }) {
+        static_assert(true);
+        bool first = true;
+        for (const auto& elem : list) {
+            if (first) {
+                first = false;
+            } else {
+                out << separator;
+            }
+            out << prefix;
+            print(out,elem);
+        }
+        return out;
+    }
+
 public:
-    using pda_t = pdaaal::TypedPDA<std::string,pdaaal::weight<void>,pdaaal::fut::type::vector,std::string>;
+//    using pda_t = pdaaal::TypedPDA<std::string,pdaaal::weight<void>,pdaaal::fut::type::vector,std::string>;
     explicit IsabellePrettyPrinter(std::ostream& out) : _out(out) { };
 
-    void print_query(const pda_t& pda, const pdaaal::PAutomaton<>& initial_automaton, const pdaaal::PAutomaton<>& final_automaton);
-    void print_begin();
-    void print_proofs();
-    void print_lemma(bool answer);
-    void print_end();
+    template<typename pda_t>
+    void print_query(const pda_t& pda, const pdaaal::PAutomaton<>& initial_automaton, const pdaaal::PAutomaton<>& final_automaton, const std::string& label_prefix = "") {
+        assert(label_prefix.find(' ') == std::string::npos);
+        size_t num_states = pda.states().size();
+        size_t num_labels = pda.number_of_labels();
+        std::vector<size_t> states(num_states);
+        std::iota(states.begin(), states.end(), 0);
+        std::vector<std::string> labels(num_labels);
+        for (size_t label_id = 0; label_id < num_labels; ++label_id) {
+            std::stringstream ss; ss << label_prefix << pda.get_symbol(label_id);
+            labels[label_id] = ss.str();
+        }
+        std::vector<size_t> extra_states;
+        for (const auto& state : initial_automaton.states()) {
+            if (state->_id >= num_states) {
+                extra_states.push_back(state->_id);
+            }
+        }
+        for (const auto& state : final_automaton.states()) {
+            if (state->_id >= num_states) {
+                extra_states.push_back(state->_id);
+            }
+        }
+        // Remove duplicates
+        std::sort(extra_states.begin(), extra_states.end());
+        extra_states.erase(std::unique(extra_states.begin(), extra_states.end()), extra_states.end());
+
+        _out << "(* Query specific part START *)" << std::endl
+             << std::endl
+             << "(* List all control locations (in PDS), labels, and non-initial states in both P-automata *)" << std::endl
+             << "datatype ctr_loc = ";
+        if (states.empty()) {
+            _out << "p" << std::endl;
+        } else {
+            print_list(_out, states, " | ", "p") << std::endl;
+        }
+        _out << "definition ctr_loc_list where \"ctr_loc_list = [";
+        if (states.empty()) {
+            _out << "p" << "]\"" << std::endl;
+        } else {
+            print_list(_out, states, ",", "p") << "]\"" << std::endl;
+        }
+        _out << "datatype label = ";
+        print_list(_out, labels, " | ") << std::endl;
+        _out << "definition label_list where \"label_list = [";
+        print_list(_out, labels, ",") << "]\"" << std::endl;
+        _out << "datatype state = ";
+        print_list(_out, extra_states, " | ", "q") << std::endl;
+        _out << "definition state_list where \"state_list = [";
+        print_list(_out, extra_states, ",", "q") << "]\"" << std::endl;
+        _out << std::endl
+             << "(* Define rules of PDS, and the two P-automata *)" << std::endl;
+        print_rules("pds_rules", pda, label_prefix);
+        print_automaton("initial", initial_automaton, pda, label_prefix);
+        print_automaton("final", final_automaton, pda, label_prefix);
+        _out << "(* Query specific part END *)" << std::endl
+             << std::endl;
+    }
+
+    void print_begin() {
+        _out << "theory Ex" << std::endl
+             << "  imports PDS.PDS_Code" << std::endl
+             << "begin" << std::endl
+             << std::endl;
+    }
+    void print_proofs() {
+        _out << "derive linorder ctr_loc" << std::endl
+             << "derive linorder label" << std::endl
+             << "instantiation ctr_loc :: finite begin" << std::endl
+             << "  instance by (standard, rule finite_subset[of _ \"set ctr_loc_list\"]) (auto intro: ctr_loc.exhaust simp: ctr_loc_list_def)" << std::endl
+             << "end" << std::endl
+             << "instantiation label :: finite begin" << std::endl
+             << "  instance by (standard, rule finite_subset[of _ \"set label_list\"]) (auto intro: label.exhaust simp: label_list_def)" << std::endl
+             << "end" << std::endl
+             << "instantiation state :: finite begin" << std::endl
+             << "  instance by (standard, rule finite_subset[of _ \"set state_list\"]) (auto intro: state.exhaust simp: state_list_def)" << std::endl
+             << "end" << std::endl
+             << "instantiation ctr_loc :: enum begin" << std::endl
+             << "definition \"enum_ctr_loc = ctr_loc_list\"" << std::endl
+             << "definition \"enum_all_ctr_loc P = list_all P ctr_loc_list\"" << std::endl
+             << "definition \"enum_ex_ctr_loc P = list_ex P ctr_loc_list\"" << std::endl
+             << "instance apply standard" << std::endl
+             << "     apply (auto simp: enum_ctr_loc_def enum_all_ctr_loc_def enum_ex_ctr_loc_def ctr_loc_list_def)" << std::endl
+             << "  subgoal for x by (cases x; simp)" << std::endl
+             << "  subgoal for P x by (cases x; simp)" << std::endl
+             << "  subgoal for P x by (cases x; simp)" << std::endl
+             << "  done" << std::endl
+             << "end" << std::endl
+             << std::endl;
+    }
+    void print_lemma(bool answer, const std::string& name = "") {
+        _out << "lemma";
+        if (!name.empty()) {
+            _out << " " << name << ":";
+        }
+        _out << std::endl
+             << "  \"check pds_rules initial_automaton initial_ctr_loc initial_ctr_loc_st" << std::endl
+             << "                   final_automaton   final_ctr_loc   final_ctr_loc_st   = Some " << (answer ? "True" : "False") << "\"" << std::endl
+             << "  by eval" << std::endl;
+    }
+    void print_end() {
+        _out << std::endl
+             << "end" << std::endl;
+    }
 
 //protected:
-    std::ostream& print_automaton_state(size_t state, const pdaaal::PAutomaton<>& automaton, bool print_type = true);
-    std::ostream& print_rules(const std::string& name, const pda_t& pda);
-    std::ostream& print_automaton(const std::string& name_prefix, const pdaaal::PAutomaton<>& automaton, const pda_t& pda);
+    std::ostream& print_automaton_state(size_t state, const pdaaal::PAutomaton<>& automaton, bool print_type = true) {
+        if (state < automaton.pda().states().size()) {
+            if (print_type) {
+                _out << "Ctr_Loc ";
+            }
+            _out << "p" << state;
+        } else {
+            if (print_type) {
+                _out << "Ctr_Loc_St ";
+            }
+            _out << "q" << state;
+        }
+        return _out;
+    }
+    template<typename pda_t>
+    std::ostream& print_rules(const std::string& name, const pda_t& pda, const std::string& label_prefix = "") {
+        auto rules = pda.all_rules();
+        _out << "definition " << name << " :: \"(ctr_loc, label) rule set\" where" << std::endl;
+        if (rules.empty()) {
+            _out << "  \"" << name << " = {}\"" << std::endl;
+            return _out;
+        }
+        _out << "  \"" << name << " = {" << std::endl;
+        bool first_rule = true;
+        for (const auto& rule : rules) {
+            if (first_rule) {
+                first_rule = false;
+            } else {
+                _out << "," << std::endl;
+            }
+            _out << "  ((p" << rule._from << ", " << label_prefix << rule._pre << "), (p" << rule._to << ", ";
+            switch (rule._op) {
+                case pdaaal::POP:
+                    _out << "pop";
+                    break;
+                case pdaaal::SWAP:
+                    _out << "swap " << label_prefix << rule._op_label;
+                    break;
+                case pdaaal::NOOP:
+                    _out << "swap " << label_prefix << rule._pre;
+                    break;
+                case pdaaal::PUSH:
+                    _out << "push " << label_prefix << rule._op_label << " " << label_prefix << rule._pre;
+                    break;
+                default:
+                    throw std::logic_error("error: Unknown op type.");
+                    break;
+            }
+            _out << "))";
+        }
+        _out << "}\"" << std::endl;
+        return _out;
+    }
+    template<typename pda_t>
+    std::ostream& print_automaton(const std::string& name_prefix, const pdaaal::PAutomaton<>& automaton, const pda_t& pda, const std::string& label_prefix = "") {
+        _out << "definition " << name_prefix
+             << "_automaton :: \"((ctr_loc, state, label) PDS.state, label) transition set\" where" << std::endl;
+
+        bool first = true;
+        std::vector<size_t> accepting_ctr_loc;
+        std::vector<size_t> accepting_ctr_loc_st;
+        for (const auto& state: automaton.states()) {
+            auto from = state->_id;
+            if (state->_accepting) {
+                if (from < automaton.pda().states().size()) {
+                    accepting_ctr_loc.push_back(from);
+                } else {
+                    accepting_ctr_loc_st.push_back(from);
+                }
+            }
+            for (const auto&[to, labels]: state->_edges) {
+                for (const auto& label: labels) {
+                    if (first) {
+                        first = false;
+                        _out << "  \"" << name_prefix << "_automaton = {" << std::endl;
+                    } else {
+                        _out << "," << std::endl;
+                    }
+                    _out << "  ((";
+                    print_automaton_state(from, automaton) << ", " << label_prefix << pda.get_symbol(label.first) << ", ";
+                    print_automaton_state(to, automaton) << "))";
+                }
+            }
+        }
+        if (first) {
+            _out << "  \"" << name_prefix << "_automaton = {}\"" << std::endl;
+        } else {
+            _out << "}\"" << std::endl;
+        }
+        _out << "definition " << name_prefix << "_ctr_loc where \"" << name_prefix << "_ctr_loc = {";
+        print_list(_out, accepting_ctr_loc, ", ", "", [&automaton,this](std::ostream& s, size_t state){ print_automaton_state(state, automaton, false); }) << "}\"" << std::endl;
+        _out << "definition " << name_prefix << "_ctr_loc_st where \"" << name_prefix << "_ctr_loc_st = {";
+        print_list(_out, accepting_ctr_loc_st, ", ", "", [&automaton,this](std::ostream& s, size_t state){ print_automaton_state(state, automaton, false); }) << "}\"" << std::endl;
+        return _out;
+    }
 
 private:
     std::ostream& _out;
