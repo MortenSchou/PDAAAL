@@ -95,11 +95,20 @@ void print_lemmas(bool answer_pre, bool answer_post, bool answer_dual, const std
 }
 
 template <bool use_state_names>
-void run(std::istream& pda_stream, std::istream& initial_stream, std::istream& final_stream, size_t pds_id, size_t initial_id, size_t final_id, bool full) {
+void run(std::istream& pda_stream, std::istream& initial_stream, std::istream& final_stream, size_t pds_id, size_t initial_id, size_t final_id, bool full, bool setup = false, bool instance = false) {
     std::stringstream dummy;
     auto pda = PdaJSONParser::parse<weight<void>,use_state_names>(pda_stream, dummy);
     auto initial_automaton = PAutomatonJsonParser::parse(initial_stream, pda);
     auto final_automaton = PAutomatonJsonParser::parse(final_stream, pda);
+
+    if (setup) {
+        IsabellePrettyPrinter isabelle_pp(std::cout);
+        isabelle_pp.print_begin("Test_Setup");
+        isabelle_pp.print_setup(pda, initial_automaton, final_automaton, "l");
+        isabelle_pp.print_proofs();
+        isabelle_pp.print_end();
+        return;
+    }
 
     bool answer_pre = solve_pre(pda, initial_automaton, final_automaton);
     bool answer_post = solve_post(pda, initial_automaton, final_automaton);
@@ -110,6 +119,12 @@ void run(std::istream& pda_stream, std::istream& initial_stream, std::istream& f
         isabelle_pp.print_begin();
         isabelle_pp.print_query(pda, initial_automaton, final_automaton, "l");
         isabelle_pp.print_proofs();
+        print_lemmas(answer_pre, answer_post, answer_dual, "correctness_check", "pds_rules", "initial", "final");
+        isabelle_pp.print_end();
+    } else if (instance) {
+        IsabellePrettyPrinter isabelle_pp(std::cout);
+        isabelle_pp.print_begin("Ex", "PDS.Test_Setup");
+        isabelle_pp.print_instance(pda, initial_automaton, final_automaton, "l");
         print_lemmas(answer_pre, answer_post, answer_dual, "correctness_check", "pds_rules", "initial", "final");
         isabelle_pp.print_end();
     } else {
@@ -135,6 +150,8 @@ int main(int argc, const char** argv) {
     std::string input_dir;
     bool state_names = false;
     bool output_full_isabelle_file = false;
+    bool output_test_setup_isabelle_file = false;
+    bool output_instance_isabelle_file = false;
     input.add_options()
             ("pds,p", po::value<size_t>(&pds_id), "Index of pushdown")
             ("initial,i", po::value<size_t>(&initial_id), "Index of initial P-automaton")
@@ -142,6 +159,8 @@ int main(int argc, const char** argv) {
             ("dir,d", po::value<std::string>(&input_dir), "Input directory to read files from.")
             ("state-names", po::bool_switch(&state_names), "Enable named states (instead of index).")
             ("full", po::bool_switch(&output_full_isabelle_file), "Output the full Isabelle theory file content.")
+            ("setup", po::bool_switch(&output_test_setup_isabelle_file), "Output test setup Isabelle theory file content with ctr_loc, label definitions etc. without pds and automata.")
+            ("instance", po::bool_switch(&output_instance_isabelle_file), "Output instance (i.e. pds, automata and lemma) Isabelle theory file that depends on a Test_Setup file.")
             ;
 //    std::string output_dir;
 //    output.add_options()
@@ -202,9 +221,9 @@ int main(int argc, const char** argv) {
     }
 
     if (state_names) {
-        run<true>(pda_stream, initial_stream, final_stream, pds_id, initial_id, final_id, output_full_isabelle_file);
+        run<true>(pda_stream, initial_stream, final_stream, pds_id, initial_id, final_id, output_full_isabelle_file, output_test_setup_isabelle_file, output_instance_isabelle_file);
     } else {
-        run<false>(pda_stream, initial_stream, final_stream, pds_id, initial_id, final_id, output_full_isabelle_file);
+        run<false>(pda_stream, initial_stream, final_stream, pds_id, initial_id, final_id, output_full_isabelle_file, output_test_setup_isabelle_file, output_instance_isabelle_file);
     }
 
     return 0;

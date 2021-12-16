@@ -48,11 +48,10 @@ private:
     }
 
 public:
-//    using pda_t = pdaaal::TypedPDA<std::string,pdaaal::weight<void>,pdaaal::fut::type::vector,std::string>;
     explicit IsabellePrettyPrinter(std::ostream& out) : _out(out) { };
 
     template<typename pda_t>
-    void print_query(const pda_t& pda, const pdaaal::PAutomaton<>& initial_automaton, const pdaaal::PAutomaton<>& final_automaton, const std::string& label_prefix = "") {
+    void print_setup(const pda_t& pda, const pdaaal::PAutomaton<>& initial_automaton, const pdaaal::PAutomaton<>& final_automaton, const std::string& label_prefix = "") {
         assert(label_prefix.find(' ') == std::string::npos);
         size_t num_states = pda.states().size();
         size_t num_labels = pda.number_of_labels();
@@ -78,8 +77,7 @@ public:
         std::sort(extra_states.begin(), extra_states.end());
         extra_states.erase(std::unique(extra_states.begin(), extra_states.end()), extra_states.end());
 
-        _out << "(* Query specific part START *)" << std::endl
-             << std::endl
+        _out << std::endl
              << "(* List all control locations (in PDS), labels, and non-initial states in both P-automata *)" << std::endl
              << "datatype ctr_loc = ";
         if (states.empty()) {
@@ -101,38 +99,48 @@ public:
         print_list(_out, extra_states, " | ", "q") << std::endl;
         _out << "definition state_list where \"state_list = [";
         print_list(_out, extra_states, ",", "q") << "]\"" << std::endl;
-        _out << std::endl
-             << "(* Define rules of PDS, and the two P-automata *)" << std::endl;
+    }
+
+    template<typename pda_t>
+    void print_instance(const pda_t& pda, const pdaaal::PAutomaton<>& initial_automaton, const pdaaal::PAutomaton<>& final_automaton, const std::string& label_prefix = "") {
+        _out << "(* Define rules of PDS, and the two P-automata *)" << std::endl;
         print_rules("pds_rules", pda, label_prefix);
         print_automaton("initial", initial_automaton, pda, label_prefix);
         print_automaton("final", final_automaton, pda, label_prefix);
-        _out << "(* Query specific part END *)" << std::endl
-             << std::endl;
+        _out << std::endl;
     }
 
-    void print_begin() {
-        _out << "theory Ex" << std::endl
-             << "  imports PDS.PDS_Code" << std::endl
+    template<typename pda_t>
+    void print_query(const pda_t& pda, const pdaaal::PAutomaton<>& initial_automaton, const pdaaal::PAutomaton<>& final_automaton, const std::string& label_prefix = "") {
+        print_setup(pda, initial_automaton, final_automaton, label_prefix);
+        _out << std::endl;
+        print_instance(pda, initial_automaton, final_automaton, label_prefix);
+    }
+
+    void print_begin(const std::string& theory_name = "Ex", const std::string& imports = "PDS.PDS_Code") {
+        _out << "theory " << theory_name << std::endl
+             << "  imports " << imports << std::endl
              << "begin" << std::endl
-             << std::endl
-             << "fun before where" << std::endl
+             << std::endl;
+    }
+    void print_proofs() {
+        _out << "fun before where" << std::endl
              << "  \"before [] x y = False\"" << std::endl
              << "| \"before (z # zs) x y = (y \\<noteq> z \\<and> (x = z \\<or> before zs x y))\"" << std::endl
              << std::endl
-             << "lemma before_irrefl: \"before xs x x \\<Longrightarrow> False\"" << std::endl
+             << R"(lemma before_irrefl: "before xs x x \<Longrightarrow> False")" << std::endl
              << "  by (induct xs) auto" << std::endl
              << "" << std::endl
-             << "lemma before_trans: \"before xs x y \\<Longrightarrow> before xs y z \\<Longrightarrow> before xs x z\"" << std::endl
+             << R"(lemma before_trans: "before xs x y \<Longrightarrow> before xs y z \<Longrightarrow> before xs x z")" << std::endl
              << "  by (induct xs) auto" << std::endl
              << std::endl
-             << "lemma before_asym: \"before xs x y \\<Longrightarrow> before xs y x \\<Longrightarrow> False\"" << std::endl
+             << R"(lemma before_asym: "before xs x y \<Longrightarrow> before xs y x \<Longrightarrow> False")" << std::endl
              << "  by (induct xs) auto" << std::endl
              << std::endl
-             << "lemma before_total_on: \"x \\<in> set xs \\<Longrightarrow> y \\<in> set xs \\<Longrightarrow> before xs x y \\<or> before xs y x \\<or> x = y\"" << std::endl
-             << "  by (induct xs) auto" << std::endl;
-    }
-    void print_proofs() {
-        _out << "instantiation ctr_loc :: finite begin" << std::endl
+             << R"(lemma before_total_on: "x \<in> set xs \<Longrightarrow> y \<in> set xs \<Longrightarrow> before xs x y \<or> before xs y x \<or> x = y")" << std::endl
+             << "  by (induct xs) auto" << std::endl
+             << std::endl
+             << "instantiation ctr_loc :: finite begin" << std::endl
              << "  instance by (standard, rule finite_subset[of _ \"set ctr_loc_list\"]) (auto intro: ctr_loc.exhaust simp: ctr_loc_list_def)" << std::endl
              << "end" << std::endl
              << "instantiation label :: finite begin" << std::endl
@@ -154,9 +162,9 @@ public:
              << "end" << std::endl
              << std::endl
              << "instantiation ctr_loc :: linorder begin" << std::endl
-             << "definition less_ctr_loc :: \"ctr_loc \\<Rightarrow> ctr_loc \\<Rightarrow> bool\" where" << std::endl
+             << R"(definition less_ctr_loc :: "ctr_loc \<Rightarrow> ctr_loc \<Rightarrow> bool" where)" << std::endl
              << "  \"less_ctr_loc = before Enum.enum\"" << std::endl
-             << "definition less_eq_ctr_loc :: \"ctr_loc \\<Rightarrow> ctr_loc \\<Rightarrow> bool\" where" << std::endl
+             << R"(definition less_eq_ctr_loc :: "ctr_loc \<Rightarrow> ctr_loc \<Rightarrow> bool" where)" << std::endl
              << "  \"less_eq_ctr_loc = sup (=) (<)\"" << std::endl
              << "instance" << std::endl
              << "  using before_total_on[of _ \"Enum.enum :: ctr_loc list\"]" << std::endl
@@ -170,17 +178,16 @@ public:
              << "  subgoal for x by (cases x; simp)" << std::endl
              << "  done" << std::endl
              << "instantiation label :: linorder begin" << std::endl
-             << "definition less_label :: \"label \\<Rightarrow> label \\<Rightarrow> bool\" where" << std::endl
+             << R"(definition less_label :: "label \<Rightarrow> label \<Rightarrow> bool" where)" << std::endl
              << "  \"less_label = before label_list\"" << std::endl
-             << "definition less_eq_label :: \"label \\<Rightarrow> label \\<Rightarrow> bool\" where" << std::endl
+             << R"(definition less_eq_label :: "label \<Rightarrow> label \<Rightarrow> bool" where)" << std::endl
              << "  \"less_eq_label a b = (a = b \\<or> a < b)\"" << std::endl
              << "instance" << std::endl
              << "  using before_total_on[of _ \"label_list\"]" << std::endl
              << "  by intro_classes" << std::endl
              << "    (auto simp: less_eq_label_def less_label_def set_label_list" << std::endl
              << "        dest: before_irrefl before_asym intro: before_trans)" << std::endl
-             << "end" << std::endl
-             << std::endl;
+             << "end" << std::endl;
     }
     void print_lemma(bool answer, const std::string& name = "") {
         _out << "lemma";
