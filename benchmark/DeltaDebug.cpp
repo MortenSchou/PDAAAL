@@ -364,27 +364,31 @@ int main(int argc, const char** argv) {
                     state = json::object();
                 }
             }
-
-            size_t num_pda_states = j_pda["pda"]["states"].size();
-            size_t i = 0;
-            for (json& state : j_initial["P-automaton"]["states"]) {
-                if (state.is_null()) {
-                    state["edges"] = json::array();
+            if (state_names) {
+                for (const auto& [state_name, _] : j_pda["pda"]["states"].items()) {
+                    j_initial["P-automaton"]["states"][state_name]["initial"] = true;
+                    j_final["P-automaton"]["states"][state_name]["initial"] = true;
                 }
-                if (i < num_pda_states) {
-                    state["initial"] = true;
+                for (auto& [_, state] : j_initial["P-automaton"]["states"].items()) {
+                    if (!state.contains("edges")) state["edges"] = json::array();
                 }
-                i++;
-            }
-            i=0;
-            for (json& state : j_final["P-automaton"]["states"]) {
-                if (state.is_null()) {
-                    state["edges"] = json::array();
+                for (auto& [_, state] : j_final["P-automaton"]["states"].items()) {
+                    if (!state.contains("edges")) state["edges"] = json::array();
                 }
-                if (i < num_pda_states) {
-                    state["initial"] = true;
+            } else {
+                size_t num_pda_states = j_pda["pda"]["states"].size();
+                size_t i = 0;
+                for (json& state : j_initial["P-automaton"]["states"]) {
+                    if (!state.contains("edges")) state["edges"] = json::array();
+                    if (i < num_pda_states) state["initial"] = true;
+                    i++;
                 }
-                i++;
+                i=0;
+                for (json& state : j_final["P-automaton"]["states"]) {
+                    if (!state.contains("edges")) state["edges"] = json::array();
+                    if (i < num_pda_states) state["initial"] = true;
+                    i++;
+                }
             }
 
             std::ofstream pda_stream(pda_file_path);
