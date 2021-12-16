@@ -114,12 +114,25 @@ public:
         _out << "theory Ex" << std::endl
              << "  imports PDS.PDS_Code" << std::endl
              << "begin" << std::endl
-             << std::endl;
+             << std::endl
+             << "fun before where" << std::endl
+             << "  \"before [] x y = False\"" << std::endl
+             << "| \"before (z # zs) x y = (y ≠ z ∧ (x = z ∨ before zs x y))\"" << std::endl
+             << std::endl
+             << "lemma before_irrefl: \"before xs x x ⟹ False\"" << std::endl
+             << "  by (induct xs) auto" << std::endl
+             << "" << std::endl
+             << "lemma before_trans: \"before xs x y ⟹ before xs y z ⟹ before xs x z\"" << std::endl
+             << "  by (induct xs) auto" << std::endl
+             << std::endl
+             << "lemma before_asym: \"before xs x y ⟹ before xs y x ⟹ False\"" << std::endl
+             << "  by (induct xs) auto" << std::endl
+             << std::endl
+             << "lemma before_total_on: \"x ∈ set xs ⟹ y ∈ set xs ⟹ before xs x y ∨ before xs y x ∨ x = y\"" << std::endl
+             << "  by (induct xs) auto" << std::endl;
     }
     void print_proofs() {
-        _out << "derive linorder ctr_loc" << std::endl
-             << "derive linorder label" << std::endl
-             << "instantiation ctr_loc :: finite begin" << std::endl
+        _out << "instantiation ctr_loc :: finite begin" << std::endl
              << "  instance by (standard, rule finite_subset[of _ \"set ctr_loc_list\"]) (auto intro: ctr_loc.exhaust simp: ctr_loc_list_def)" << std::endl
              << "end" << std::endl
              << "instantiation label :: finite begin" << std::endl
@@ -138,6 +151,34 @@ public:
              << "  subgoal for P x by (cases x; simp)" << std::endl
              << "  subgoal for P x by (cases x; simp)" << std::endl
              << "  done" << std::endl
+             << "end" << std::endl
+             << std::endl
+             << "instantiation ctr_loc :: linorder begin" << std::endl
+             << "definition less_ctr_loc :: \"ctr_loc ⇒ ctr_loc ⇒ bool\" where" << std::endl
+             << "  \"less_ctr_loc = before Enum.enum\"" << std::endl
+             << "definition less_eq_ctr_loc :: \"ctr_loc ⇒ ctr_loc ⇒ bool\" where" << std::endl
+             << "  \"less_eq_ctr_loc = sup (=) (<)\"" << std::endl
+             << "instance" << std::endl
+             << "  using before_total_on[of _ \"Enum.enum :: ctr_loc list\"]" << std::endl
+             << "  by intro_classes" << std::endl
+             << "    (auto simp: less_eq_ctr_loc_def less_ctr_loc_def enum_UNIV" << std::endl
+             << "        dest: before_irrefl before_asym intro: before_trans)" << std::endl
+             << "end" << std::endl
+             << std::endl
+             << "lemma set_label_list: \"set label_list = UNIV\"" << std::endl
+             << "  apply (auto simp: label_list_def)" << std::endl
+             << "  subgoal for x by (cases x; simp)" << std::endl
+             << "  done" << std::endl
+             << "instantiation label :: linorder begin" << std::endl
+             << "definition less_label :: \"label ⇒ label ⇒ bool\" where" << std::endl
+             << "  \"less_label = before label_list\"" << std::endl
+             << "definition less_eq_label :: \"label ⇒ label ⇒ bool\" where" << std::endl
+             << "  \"less_eq_label a b = (a = b ∨ a < b)\"" << std::endl
+             << "instance" << std::endl
+             << "  using before_total_on[of _ \"label_list\"]" << std::endl
+             << "  by intro_classes" << std::endl
+             << "    (auto simp: less_eq_label_def less_label_def set_label_list" << std::endl
+             << "        dest: before_irrefl before_asym intro: before_trans)" << std::endl
              << "end" << std::endl
              << std::endl;
     }
@@ -160,12 +201,12 @@ public:
     std::ostream& print_automaton_state(size_t state, const pdaaal::PAutomaton<>& automaton, bool print_type = true) {
         if (state < automaton.pda().states().size()) {
             if (print_type) {
-                _out << "Ctr_Loc ";
+                _out << "Initial ";
             }
             _out << "p" << state;
         } else {
             if (print_type) {
-                _out << "Ctr_Loc_St ";
+                _out << "Noninitial ";
             }
             _out << "q" << state;
         }
