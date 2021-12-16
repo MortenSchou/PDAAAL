@@ -38,7 +38,6 @@ namespace fs = std::filesystem;
 namespace po = boost::program_options;
 using namespace pdaaal;
 
-//using pda_t = PdaaalSAXHandler<weight<void>,true>::pda_t;
 template <typename pda_t>
 bool solve_pre(const pda_t& pda, PAutomaton<> initial_automaton, PAutomaton<> final_automaton) {
     PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
@@ -95,6 +94,33 @@ void print_lemmas(bool answer_pre, bool answer_post, bool answer_dual, const std
     }
 }
 
+template <bool use_state_names>
+void run(std::istream& pda_stream, std::istream& initial_stream, std::istream& final_stream, size_t pds_id, size_t initial_id, size_t final_id, bool full) {
+    std::stringstream dummy;
+    auto pda = PdaJSONParser::parse<weight<void>,use_state_names>(pda_stream, dummy);
+    auto initial_automaton = PAutomatonJsonParser::parse(initial_stream, pda);
+    auto final_automaton = PAutomatonJsonParser::parse(final_stream, pda);
+
+    bool answer_pre = solve_pre(pda, initial_automaton, final_automaton);
+    bool answer_post = solve_post(pda, initial_automaton, final_automaton);
+    bool answer_dual = solve_dual(pda, initial_automaton, final_automaton);
+
+    if (full) {
+        IsabellePrettyPrinter isabelle_pp(std::cout);
+        isabelle_pp.print_begin();
+        isabelle_pp.print_query(pda, initial_automaton, final_automaton, "l");
+        isabelle_pp.print_proofs();
+        print_lemmas(answer_pre, answer_post, answer_dual, "correctness_check", "pds_rules", "initial", "final");
+        isabelle_pp.print_end();
+    } else {
+        std::stringstream lemma_name; lemma_name << "p" << pds_id << "i" << initial_id << "f" << final_id;
+        std::stringstream pds_name; pds_name << "pds_rules_" << pds_id;
+        std::stringstream initial_name; initial_name << "initial_" << initial_id;
+        std::stringstream final_name; initial_name << "final_" << final_id;
+        print_lemmas(answer_pre, answer_post, answer_dual, lemma_name.str(), pds_name.str(), initial_name.str(), final_name.str());
+    }
+}
+
 int main(int argc, const char** argv) {
     po::options_description opts;
     opts.add_options()
@@ -107,12 +133,14 @@ int main(int argc, const char** argv) {
     size_t initial_id = 0;
     size_t final_id = 0;
     std::string input_dir;
-    bool output_full_isabelle_file;
+    bool state_names = false;
+    bool output_full_isabelle_file = false;
     input.add_options()
             ("pds,p", po::value<size_t>(&pds_id), "Index of pushdown")
             ("initial,i", po::value<size_t>(&initial_id), "Index of initial P-automaton")
             ("final,f", po::value<size_t>(&final_id), "Index of final P-automaton")
             ("dir,d", po::value<std::string>(&input_dir), "Input directory to read files from.")
+            ("state-names", po::bool_switch(&state_names), "Enable named states (instead of index).")
             ("full", po::bool_switch(&output_full_isabelle_file), "Output the full Isabelle theory file content.")
             ;
 //    std::string output_dir;
@@ -172,37 +200,11 @@ int main(int argc, const char** argv) {
         es << "error: Could not open file: " << final_file_path << std::endl;
         throw std::runtime_error(es.str());
     }
-    std::stringstream dummy;
 
-    if (output_full_isabelle_file) {
-        auto pda = PdaJSONParser::parse<weight<void>,false>(pda_stream, dummy);
-        auto initial_automaton = PAutomatonJsonParser::parse(initial_stream, pda);
-        auto final_automaton = PAutomatonJsonParser::parse(final_stream, pda);
-
-        bool answer_pre = solve_pre(pda, initial_automaton, final_automaton);
-        bool answer_post = solve_post(pda, initial_automaton, final_automaton);
-        bool answer_dual = solve_dual(pda, initial_automaton, final_automaton);
-
-        IsabellePrettyPrinter isabelle_pp(std::cout);
-        isabelle_pp.print_begin();
-        isabelle_pp.print_query(pda, initial_automaton, final_automaton, "l");
-        isabelle_pp.print_proofs();
-        print_lemmas(answer_pre, answer_post, answer_dual, "correctness_check", "pds_rules", "initial", "final");
-        isabelle_pp.print_end();
+    if (state_names) {
+        run<true>(pda_stream, initial_stream, final_stream, pds_id, initial_id, final_id, output_full_isabelle_file);
     } else {
-        auto pda = PdaJSONParser::parse<weight<void>,true>(pda_stream, dummy);
-        auto initial_automaton = PAutomatonJsonParser::parse(initial_stream, pda);
-        auto final_automaton = PAutomatonJsonParser::parse(final_stream, pda);
-
-        bool answer_pre = solve_pre(pda, initial_automaton, final_automaton);
-        bool answer_post = solve_post(pda, initial_automaton, final_automaton);
-        bool answer_dual = solve_dual(pda, initial_automaton, final_automaton);
-
-        std::stringstream lemma_name; lemma_name << "p" << pds_id << "i" << initial_id << "f" << final_id;
-        std::stringstream pds_name; pds_name << "pds_rules_" << pds_id;
-        std::stringstream initial_name; initial_name << "initial_" << initial_id;
-        std::stringstream final_name; initial_name << "final_" << initial_id;
-        print_lemmas(answer_pre, answer_post, answer_dual, lemma_name.str(), pds_name.str(), initial_name.str(), final_name.str());
+        run<false>(pda_stream, initial_stream, final_stream, pds_id, initial_id, final_id, output_full_isabelle_file);
     }
 
     return 0;
