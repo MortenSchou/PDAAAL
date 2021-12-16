@@ -117,18 +117,18 @@ public:
              << std::endl
              << "fun before where" << std::endl
              << "  \"before [] x y = False\"" << std::endl
-             << "| \"before (z # zs) x y = (y ≠ z ∧ (x = z ∨ before zs x y))\"" << std::endl
+             << "| \"before (z # zs) x y = (y \\<noteq> z \\<and> (x = z \\<or> before zs x y))\"" << std::endl
              << std::endl
-             << "lemma before_irrefl: \"before xs x x ⟹ False\"" << std::endl
+             << "lemma before_irrefl: \"before xs x x \\<Longrightarrow> False\"" << std::endl
              << "  by (induct xs) auto" << std::endl
              << "" << std::endl
-             << "lemma before_trans: \"before xs x y ⟹ before xs y z ⟹ before xs x z\"" << std::endl
+             << "lemma before_trans: \"before xs x y \\<Longrightarrow> before xs y z \\<Longrightarrow> before xs x z\"" << std::endl
              << "  by (induct xs) auto" << std::endl
              << std::endl
-             << "lemma before_asym: \"before xs x y ⟹ before xs y x ⟹ False\"" << std::endl
+             << "lemma before_asym: \"before xs x y \\<Longrightarrow> before xs y x \\<Longrightarrow> False\"" << std::endl
              << "  by (induct xs) auto" << std::endl
              << std::endl
-             << "lemma before_total_on: \"x ∈ set xs ⟹ y ∈ set xs ⟹ before xs x y ∨ before xs y x ∨ x = y\"" << std::endl
+             << "lemma before_total_on: \"x \\<in> set xs \\<Longrightarrow> y \\<in> set xs \\<Longrightarrow> before xs x y \\<or> before xs y x \\<or> x = y\"" << std::endl
              << "  by (induct xs) auto" << std::endl;
     }
     void print_proofs() {
@@ -154,9 +154,9 @@ public:
              << "end" << std::endl
              << std::endl
              << "instantiation ctr_loc :: linorder begin" << std::endl
-             << "definition less_ctr_loc :: \"ctr_loc ⇒ ctr_loc ⇒ bool\" where" << std::endl
+             << "definition less_ctr_loc :: \"ctr_loc \\<Rightarrow> ctr_loc \\<Rightarrow> bool\" where" << std::endl
              << "  \"less_ctr_loc = before Enum.enum\"" << std::endl
-             << "definition less_eq_ctr_loc :: \"ctr_loc ⇒ ctr_loc ⇒ bool\" where" << std::endl
+             << "definition less_eq_ctr_loc :: \"ctr_loc \\<Rightarrow> ctr_loc \\<Rightarrow> bool\" where" << std::endl
              << "  \"less_eq_ctr_loc = sup (=) (<)\"" << std::endl
              << "instance" << std::endl
              << "  using before_total_on[of _ \"Enum.enum :: ctr_loc list\"]" << std::endl
@@ -170,10 +170,10 @@ public:
              << "  subgoal for x by (cases x; simp)" << std::endl
              << "  done" << std::endl
              << "instantiation label :: linorder begin" << std::endl
-             << "definition less_label :: \"label ⇒ label ⇒ bool\" where" << std::endl
+             << "definition less_label :: \"label \\<Rightarrow> label \\<Rightarrow> bool\" where" << std::endl
              << "  \"less_label = before label_list\"" << std::endl
-             << "definition less_eq_label :: \"label ⇒ label ⇒ bool\" where" << std::endl
-             << "  \"less_eq_label a b = (a = b ∨ a < b)\"" << std::endl
+             << "definition less_eq_label :: \"label \\<Rightarrow> label \\<Rightarrow> bool\" where" << std::endl
+             << "  \"less_eq_label a b = (a = b \\<or> a < b)\"" << std::endl
              << "instance" << std::endl
              << "  using before_total_on[of _ \"label_list\"]" << std::endl
              << "  by intro_classes" << std::endl
