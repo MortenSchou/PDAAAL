@@ -41,7 +41,7 @@ namespace fs = std::filesystem;
 namespace po = boost::program_options;
 using namespace pdaaal;
 
-using generated_pda_t = IsabellePrettyPrinter::pda_t;
+using generated_pda_t = TypedPDA<std::string,weight<void>,fut::type::vector,std::string>;
 
 generated_pda_t generate_pda(size_t num_states, size_t num_labels, size_t num_rules, std::mt19937& random_gen, std::ostream& debug) {
     std::string alphabet = "ABCDEFGHIJKLMNOPQRSTUVXYZ";
@@ -567,10 +567,12 @@ int main(int argc, const char** argv) {
 //    bool silent = false;
 //    std::string output_file;
     std::string output_dir;
+    bool gen_random = false;
     output.add_options()
 //            ("disable-parser-warnings,W", po::bool_switch(&no_parser_warnings), "Disable warnings from parser.")
 //            ("silent,s", po::bool_switch(&silent), "Disables non-essential output (implies -W).")
 //            ("output,o", po::value<std::string>(&output_file), "Output file (default is standard out).")
+            ("random", po::bool_switch(&gen_random), "Generate random PDA and automata.")
             ("dir,d", po::value<std::string>(&output_dir), "Output directory to put instance files in.")
             ;
     opts.add(input);
@@ -596,10 +598,13 @@ int main(int argc, const char** argv) {
         std::cerr << "Specified output directory: " << output_dir_path << " is not a valid directory.";
         return 1;
     }
-    generate_pda_without_symmetries(output_dir_path);
-    generate_pautomata_without_symmetries(output_dir_path, true);
-    generate_pautomata_without_symmetries(output_dir_path, false);
-//    generate_many(random_gen, output_dir_path, number_of_instances);
+    if (gen_random) {
+        generate_many(random_gen, output_dir_path, number_of_instances);
+    } else {
+        generate_pda_without_symmetries(output_dir_path);
+        generate_pautomata_without_symmetries(output_dir_path, true);
+        generate_pautomata_without_symmetries(output_dir_path, false);
+    }
 
 //    if (output_file.empty() || output_file == "-") {
 //        generate(std::cout, random_gen, false);
