@@ -104,7 +104,7 @@ void run(std::istream& pda_stream, std::istream& initial_stream, std::istream& f
     if (setup) {
         IsabellePrettyPrinter isabelle_pp(std::cout);
         isabelle_pp.print_begin("Test_Setup");
-        isabelle_pp.print_setup(pda, initial_automaton, final_automaton, "l");
+        isabelle_pp.print_setup(pda, initial_automaton, final_automaton, "l", true);
         isabelle_pp.print_proofs();
         isabelle_pp.print_end();
         return;

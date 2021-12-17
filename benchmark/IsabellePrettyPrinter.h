@@ -51,7 +51,7 @@ public:
     explicit IsabellePrettyPrinter(std::ostream& out) : _out(out) { };
 
     template<typename pda_t>
-    void print_setup(const pda_t& pda, const pdaaal::PAutomaton<>& initial_automaton, const pdaaal::PAutomaton<>& final_automaton, const std::string& label_prefix = "") {
+    void print_setup(const pda_t& pda, const pdaaal::PAutomaton<>& initial_automaton, const pdaaal::PAutomaton<>& final_automaton, const std::string& label_prefix = "", bool more_automaton_states = false) {
         assert(label_prefix.find(' ') == std::string::npos);
         size_t num_states = pda.states().size();
         size_t num_labels = pda.number_of_labels();
@@ -91,14 +91,30 @@ public:
         } else {
             print_list(_out, states, ",", "p") << "]\"" << std::endl;
         }
+        if (labels.empty()) {
+            labels.emplace_back("l");
+        }
         _out << "datatype label = ";
         print_list(_out, labels, " | ") << std::endl;
         _out << "definition label_list where \"label_list = [";
         print_list(_out, labels, ",") << "]\"" << std::endl;
+
+        if (more_automaton_states) { // Used for setup before delta-debugging.
+            states.insert(states.end(), extra_states.begin(), extra_states.end());
+            std::swap(states, extra_states);
+        }
         _out << "datatype state = ";
-        print_list(_out, extra_states, " | ", "q") << std::endl;
+        if (extra_states.empty()) {
+            _out << "q" << std::endl;
+        } else {
+            print_list(_out, extra_states, " | ", "q") << std::endl;
+        }
         _out << "definition state_list where \"state_list = [";
-        print_list(_out, extra_states, ",", "q") << "]\"" << std::endl;
+        if (extra_states.empty()) {
+            _out << "q" << "]\"" << std::endl;
+        } else {
+            print_list(_out, extra_states, ",", "q") << "]\"" << std::endl;
+        }
     }
 
     template<typename pda_t>
