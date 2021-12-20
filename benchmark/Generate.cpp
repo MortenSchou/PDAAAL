@@ -57,6 +57,10 @@ generated_pda_t generate_pda(size_t num_states, size_t num_labels, size_t num_ru
         pda.insert_label(lbl);
         labels.push_back(lbl);
     }
+    for (size_t i = 0; i < num_states; ++i) {
+        std::stringstream state_name; state_name << "p" << i;
+        pda.insert_state(state_name.str());
+    }
     assert(labels.size() == num_labels);
     auto num_ops = 1 + 2 * num_labels;
     auto all_rules = num_states * num_states * num_labels * num_ops;
@@ -110,6 +114,8 @@ generated_automaton_t generate_pautomaton(const generated_pda_t& pda, size_t num
     for (size_t i = 0; i < num_extra_states; ++i) {
         bool accepting = accept_extra_distrib(random_gen) == 0;
         automaton.add_state(false, accepting);
+        std::stringstream state_name; state_name << "q" << i;
+        automaton.insert_state(state_name.str());
     }
 
     auto all_transitions = (num_states + num_extra_states) * num_extra_states * num_labels;
