@@ -27,6 +27,8 @@
 #ifndef PDAAAL_TYPEDPAUTOMATON_H
 #define PDAAAL_TYPEDPAUTOMATON_H
 
+#include <iostream>
+#include <fstream>
 #include <pdaaal/PAutomaton.h>
 #include <pdaaal/TypedPDA.h>
 
