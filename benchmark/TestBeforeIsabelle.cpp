@@ -104,8 +104,9 @@ void run(std::istream& pda_stream, std::istream& initial_stream, std::istream& f
     if (setup) {
         IsabellePrettyPrinter isabelle_pp(std::cout);
         isabelle_pp.print_begin("Test_Setup");
+        isabelle_pp.print_sizes(pda.states().size(), pda.number_of_labels(), std::max(initial_automaton.states().size(), final_automaton.states().size()));
+        isabelle_pp.print_new_proofs();
         isabelle_pp.print_setup(pda, initial_automaton, final_automaton, "l", true);
-        isabelle_pp.print_proofs();
         isabelle_pp.print_end();
         return;
     }
@@ -117,8 +118,9 @@ void run(std::istream& pda_stream, std::istream& initial_stream, std::istream& f
     if (full) {
         IsabellePrettyPrinter isabelle_pp(std::cout);
         isabelle_pp.print_begin();
+        isabelle_pp.print_sizes(pda.states().size(), pda.number_of_labels(), std::max(initial_automaton.states().size(), final_automaton.states().size()) - pda.states().size());
+        isabelle_pp.print_new_proofs();
         isabelle_pp.print_query(pda, initial_automaton, final_automaton, "l");
-        isabelle_pp.print_proofs();
         print_lemmas(answer_pre, answer_post, answer_dual, "correctness_check", "pds_rules", "initial", "final");
         isabelle_pp.print_end();
     } else if (instance) {
