@@ -357,7 +357,7 @@ namespace pdaaal {
         for (const auto& state : pda.states()) {
             auto j_state = json::object();
             for (const auto& [rule, labels] : state._rules) {
-                for (const auto label : pda.get_labels(labels)) {
+                for (const auto& label : pda.get_labels(labels)) {
                     auto j_rule = json::object();
                     std::stringstream ss;
                     ss << pda.get_state(rule._to);

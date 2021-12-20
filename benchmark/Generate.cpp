@@ -42,6 +42,7 @@ namespace po = boost::program_options;
 using namespace pdaaal;
 
 using generated_pda_t = TypedPDA<std::string,weight<void>,fut::type::vector,std::string>;
+using generated_automaton_t = decltype(TypedPAutomaton(std::declval<generated_pda_t>(), std::declval<std::vector<size_t>>(), true));
 
 generated_pda_t generate_pda(size_t num_states, size_t num_labels, size_t num_rules, std::mt19937& random_gen, std::ostream& debug) {
     std::string alphabet = "ABCDEFGHIJKLMNOPQRSTUVXYZ";
@@ -91,7 +92,7 @@ generated_pda_t generate_pda(size_t num_states, size_t num_labels, size_t num_ru
     return pda;
 }
 
-PAutomaton<> generate_pautomaton(const generated_pda_t& pda, size_t num_extra_states, size_t num_transitions, std::mt19937& random_gen, std::ostream& debug) {
+generated_automaton_t generate_pautomaton(const generated_pda_t& pda, size_t num_extra_states, size_t num_transitions, std::mt19937& random_gen, std::ostream& debug) {
     size_t num_states = pda.states().size();
     size_t num_labels = pda.number_of_labels();
 
@@ -105,7 +106,7 @@ PAutomaton<> generate_pautomaton(const generated_pda_t& pda, size_t num_extra_st
             initially_accepting_states.push_back(i);
         }
     }
-    pdaaal::PAutomaton<> automaton(pda, initially_accepting_states, true);
+    generated_automaton_t automaton(pda, initially_accepting_states, true);
     for (size_t i = 0; i < num_extra_states; ++i) {
         bool accepting = accept_extra_distrib(random_gen) == 0;
         automaton.add_state(false, accepting);
@@ -198,6 +199,19 @@ void generate(std::ostream& out, std::mt19937& random_gen, bool debug_info
     if (answer) { count_p++; } else { count_n++; }
 }
 
+void print_json(const json& j, const fs::path& output_dir, const std::string& name, size_t index) {
+    std::stringstream file_name;
+    file_name << name << index << ".json";
+    auto file_path = output_dir / file_name.str();
+    std::ofstream out_stream(file_path);
+    if (!out_stream.is_open()) {
+        std::stringstream es;
+        es << "error: Could not open file: " << file_path << std::endl;
+        throw std::runtime_error(es.str());
+    }
+    out_stream << j.dump() << std::endl;
+}
+
 void generate_many(std::mt19937& random_gen, const fs::path& output_dir, size_t number_of_instances) {
     std::stringstream dummy;
 
@@ -224,6 +238,9 @@ void generate_many(std::mt19937& random_gen, const fs::path& output_dir, size_t 
         bool answer = to_isabelle(out_stream, pda, initial_automaton, final_automaton);
 
         //bool answer = solve(pda, initial_automaton, final_automaton);
+        print_json(pda.to_json(), output_dir, "pda", i);
+        print_json(initial_automaton.to_json(), output_dir, "initial", i);
+        print_json(final_automaton.to_json(), output_dir, "final", i);
 
         // Get statistics
         PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
