@@ -219,30 +219,18 @@ void generate_many(std::mt19937& random_gen, const fs::path& output_dir, size_t 
     size_t count_p = 0, count_n = 0, count_already_intersecting = 0;
 
     for (size_t i = 0; i < number_of_instances; ++i) {
-        std::stringstream file_name;
-        file_name << "test" << i << ".thy";
-        auto file_path = output_dir / file_name.str();
-        std::ofstream out_stream(file_path);
-        if (!out_stream.is_open()) {
-            std::stringstream es;
-            es << "error: Could not open file: " << file_path << std::endl;
-            throw std::runtime_error(es.str());
-        }
-
         // Generate
         auto pda = generate_pda(4, 5, i%200, random_gen, dummy);
         auto initial_automaton = generate_pautomaton(pda, 3, i%13, random_gen, dummy);
         auto final_automaton = generate_pautomaton(pda, 2, i%11, random_gen, dummy);
 
-        // Print in Isabelle format (also calculates answer).
-        bool answer = to_isabelle(out_stream, pda, initial_automaton, final_automaton);
 
-        //bool answer = solve(pda, initial_automaton, final_automaton);
         print_json(pda.to_json(), output_dir, "pda", i);
         print_json(initial_automaton.to_json(), output_dir, "initial", i);
         print_json(final_automaton.to_json(), output_dir, "final", i);
 
         // Get statistics
+        bool answer = solve(pda, initial_automaton, final_automaton);
         PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
         instance.enable_pre_star();
         if (instance.initialize_product()) { count_already_intersecting++; }
