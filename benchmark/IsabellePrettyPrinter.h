@@ -161,9 +161,9 @@ public:
              << std::endl;
     }
     void print_sizes(size_t num_pda_states, size_t num_labels, size_t num_extra_states) {
-        _out << "abbreviation ctr_locN :: nat where \"ctr_locN \\<equiv> " << num_pda_states << "\"" << std::endl
-             << "abbreviation labelN :: nat where \"labelN \\<equiv> " << num_labels << "\"" << std::endl
-             << "abbreviation stateN :: nat where \"stateN \\<equiv> " << num_extra_states << "\"" << std::endl;
+        _out << "abbreviation ctr_locN :: nat where \"ctr_locN \\<equiv> " << std::max(2ul,num_pda_states) << "\"" << std::endl
+             << "abbreviation labelN :: nat where \"labelN \\<equiv> " << std::max(2ul,num_labels) << "\"" << std::endl
+             << "abbreviation stateN :: nat where \"stateN \\<equiv> " << std::max(2ul,num_extra_states) << "\"" << std::endl;
     }
     void print_new_proofs() {
         _out << R"foo(
