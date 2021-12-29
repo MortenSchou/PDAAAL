@@ -335,6 +335,10 @@ int main(int argc, const char** argv) {
                     } else {
                         state[label] = feature["rule"];
                     }
+                    json& to_state = (feature["rule"]["to"].is_number_unsigned()) ? j_pda["pda"]["states"][feature["rule"]["to"].get<size_t>()] : j_pda["pda"]["states"][feature["rule"]["to"].get<std::string>()];
+                    if (to_state.is_null()) {
+                        to_state = json::object();
+                    }
                     break;
                 }
                 case 2:
