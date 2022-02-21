@@ -27,10 +27,8 @@
 #ifndef PDAAAL_PDAJSONPARSER_H
 #define PDAAAL_PDAJSONPARSER_H
 
+#include <pdaaal/PDA.h>
 #include <nlohmann/json.hpp>
-
-#include <pdaaal/TypedPDA.h>
-
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -46,12 +44,12 @@ namespace pdaaal {
     class PdaaalSAXHandler {
     public:
         using pda_t = std::conditional_t<use_state_names,
-                TypedPDA<std::string, W, fut::type::vector, std::string>,
-                TypedPDA<std::string, W, fut::type::vector, size_t>>;
+                PDA<std::string, W, fut::type::vector, std::string>,
+                PDA<std::string, W, fut::type::vector, size_t>>;
     private:
         using build_pda_t = std::conditional_t<use_state_names,
-                TypedPDA<std::string, W, fut::type::hash, std::string>,
-                TypedPDA<std::string, W, fut::type::hash, size_t>>;
+                PDA<std::string, W, fut::type::hash, std::string>,
+                PDA<std::string, W, fut::type::hash, size_t>>;
 
         static constexpr bool expect_weight = is_weighted<W>;
 
@@ -228,7 +226,7 @@ namespace pdaaal {
         size_t current_from_state = 0;
         std::vector<uint32_t> current_pre;
         bool current_wildcard = false;
-        typename PDA<W>::rule_t current_rule;
+        typename internal::PDA<W>::rule_t current_rule;
 
     public:
         using number_integer_t = typename json::number_integer_t;
