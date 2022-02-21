@@ -26,12 +26,11 @@
 
 #define BOOST_TEST_MODULE Verification_test
 
-#include <boost/test/unit_test.hpp>
-
 #include <parsing/PAutomatonParser.h>
 #include <parsing/PdaJsonParser.h>
 #include <pdaaal/SolverInstance.h>
 #include <pdaaal/Solver.h>
+#include <boost/test/unit_test.hpp>
 
 using namespace pdaaal;
 
@@ -100,7 +99,7 @@ void print_edges_path(std::ostream& s, const AutomatonPath<>& automaton_path, co
     s << std::endl;
 }
 template<typename label_t, typename state_t, typename W, bool ssm, TraceInfoType trace_info_type>
-auto get_edge(const PAutomaton<W,trace_info_type>& automaton, const TypedPDA<label_t,W,fut::type::vector,state_t,ssm>& pda, const state_t& from, const label_t& label, const state_t& to) {
+auto get_edge(const internal::PAutomaton<W,trace_info_type>& automaton, const PDA<label_t,W,fut::type::vector,state_t,ssm>& pda, const state_t& from, const label_t& label, const state_t& to) {
     BOOST_TEST(pda.exists_state(from).first);
     auto from_id = pda.exists_state(from).second;
     BOOST_TEST(pda.exists_label(label).first);
@@ -566,9 +565,9 @@ BOOST_AUTO_TEST_CASE(Verification_longest_trace_arithmetic_3_5_test)
     auto [trace, weight] = Solver::get_trace<Trace_Type::Longest>(instance);
     BOOST_CHECK_EQUAL(w, weight);
 
-    BOOST_CHECK(automaton_path.has_value());
+    BOOST_CHECK(!automaton_path.is_null());
     // TODO: Test instead of printing
-    details::TraceBack tb(instance.automaton(), std::move(automaton_path).value());
+    internal::TraceBack tb(instance.automaton(), std::move(automaton_path));
     std::unordered_set<std::tuple<size_t,uint32_t,size_t>, absl::Hash<std::tuple<size_t,uint32_t,size_t>>> seen_front;
     while (seen_front.emplace(tb.path().front_edge()).second) {
         print_conf_path(s, tb.path(), pda);
@@ -654,9 +653,9 @@ BOOST_AUTO_TEST_CASE(Verification_longest_trace_arithmetic_3_3or5_test)
     auto [trace, weight] = Solver::get_trace<Trace_Type::Longest>(instance);
     BOOST_CHECK_EQUAL(w, weight);
 
-    BOOST_CHECK(automaton_path.has_value());
+    BOOST_CHECK(!automaton_path.is_null());
     // TODO: Test instead of printing
-    details::TraceBack tb(instance.automaton(), std::move(automaton_path).value());
+    internal::TraceBack tb(instance.automaton(), std::move(automaton_path));
     std::unordered_set<std::tuple<size_t,uint32_t,size_t>, absl::Hash<std::tuple<size_t,uint32_t,size_t>>> seen_front;
     while (seen_front.emplace(tb.path().front_edge()).second) {
         print_conf_path(s, tb.path(), pda);
@@ -714,9 +713,9 @@ BOOST_AUTO_TEST_CASE(Verification_longest_trace_which_pop_seq_test)
     auto [trace, weight] = Solver::get_trace<Trace_Type::Longest>(instance);
     BOOST_CHECK_EQUAL(w, weight);
 
-    BOOST_CHECK(automaton_path.has_value());
+    BOOST_CHECK(!automaton_path.is_null());
     // TODO: Test instead of printing
-    details::TraceBack tb(instance.automaton(), std::move(automaton_path).value());
+    internal::TraceBack tb(instance.automaton(), std::move(automaton_path));
     std::unordered_set<std::tuple<size_t,uint32_t,size_t>, absl::Hash<std::tuple<size_t,uint32_t,size_t>>> seen_front;
     while (seen_front.emplace(tb.path().front_edge()).second) {
         print_conf_path(s, tb.path(), pda);
@@ -797,9 +796,9 @@ BOOST_AUTO_TEST_CASE(Verification_longest_trace_hill_test)
     BOOST_CHECK_NE(pXq, nullptr);
     BOOST_CHECK_EQUAL(pXq->second, max_weight<uint32_t>::bottom());
 
-    BOOST_CHECK(automaton_path.has_value());
+    BOOST_CHECK(!automaton_path.is_null());
     // TODO: Test instead of printing
-    details::TraceBack tb(instance.automaton(), std::move(automaton_path).value());
+    internal::TraceBack tb(instance.automaton(), std::move(automaton_path));
     std::unordered_set<std::tuple<size_t,uint32_t,size_t>, absl::Hash<std::tuple<size_t,uint32_t,size_t>>> seen_front;
     while (seen_front.emplace(tb.path().front_edge()).second) {
         print_conf_path(s, tb.path(), pda);
@@ -848,9 +847,9 @@ BOOST_AUTO_TEST_CASE(Verification_longest_trace_start_hill_end_test)
     auto [automaton_path, w] = instance.find_path<Trace_Type::Longest>();
     BOOST_CHECK_EQUAL(w, max_weight<uint32_t>::bottom());
 
-    BOOST_CHECK(automaton_path.has_value());
+    BOOST_CHECK(!automaton_path.is_null());
     // TODO: Test instead of printing
-    details::TraceBack tb(instance.automaton(), std::move(automaton_path).value());
+    internal::TraceBack tb(instance.automaton(), std::move(automaton_path));
     std::unordered_set<std::tuple<size_t,uint32_t,size_t>, absl::Hash<std::tuple<size_t,uint32_t,size_t>>> seen_front;
     while (seen_front.emplace(tb.path().front_edge()).second) {
         print_conf_path(s, tb.path(), pda);

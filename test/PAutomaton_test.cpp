@@ -26,21 +26,53 @@
 
 #define BOOST_TEST_MODULE PAutomaton
 
-#include <boost/test/unit_test.hpp>
 #include <pdaaal/PAutomaton.h>
-#include <pdaaal/TypedPDA.h>
+#include <pdaaal/PDA.h>
 #include <pdaaal/Solver.h>
+#include <boost/test/unit_test.hpp>
 #include <chrono>
 
 using namespace pdaaal;
 
+BOOST_AUTO_TEST_CASE(PAutomatonFromJsonTest)
+{
+    std::unordered_set<std::string> labels{"A"};
+    PDA<std::string> pda(labels);
+    pda.add_rule(0, 0, POP, "*", "A");
+    std::istringstream automaton_stream(R"({"P-automaton":{
+        "states":[
+            {"edges":[{"label":"A","to":1}],"initial":true},
+            {"edges":[{"label":"A","to":2}]},
+            {"accepting":true,"edges":[]}
+        ]
+    }})");
+    auto automaton = PAutomatonJsonParser::parse<>(automaton_stream, pda);
+    std::vector<uint32_t> stack; stack.emplace_back(0);
+    bool result = Solver::post_star_accepts(automaton, 0, stack);
+    BOOST_CHECK(result);
+}
+
+BOOST_AUTO_TEST_CASE(PAutomatonToJsonTest)
+{
+    std::unordered_set<std::string> labels{"A"};
+    PDA<std::string> pda(labels);
+    pda.add_rule(0, 0, POP, "*", "A");
+    std::vector<std::string> init_stack{"A", "A"};
+    PAutomaton automaton(pda, 0, init_stack);
+    auto j = automaton.to_json();
+    BOOST_TEST_MESSAGE(j.dump());
+    BOOST_CHECK_EQUAL(j.dump(), R"({"P-automaton":{"states":[{"edges":[{"label":"A","to":1}],"initial":true},{"edges":[{"label":"A","to":2}]},{"accepting":true,"edges":[]}]}})");
+}
+
 BOOST_AUTO_TEST_CASE(Dijkstra_Test_1)
 {
+    using trace_t = internal::trace_t;
+
     std::unordered_set<char> labels{'A'};
-    TypedPDA<char, weight<int>> pda(labels);
+    PDA<char, weight<int>> pda(labels);
     pda.add_rule(0, 0, POP, '*', 'A', 0);
 
-    PAutomaton automaton(pda, std::vector<size_t>());
+    internal::PAutomaton automaton(pda, std::vector<size_t>());
     auto id1 = automaton.add_state(false, false);
     auto id2 = automaton.add_state(false, false);
     auto id3 = automaton.add_state(false, false);
@@ -70,7 +102,7 @@ BOOST_AUTO_TEST_CASE(UnweightedPreStar)
     // This is pretty much the rules from the example in Figure 3.1 (Schwoon-php02)
     // However r_2 requires a swap and a push, which is done through auxiliary state 3.
     std::unordered_set<char> labels{'A', 'B', 'C'};
-    TypedPDA<char> pda(labels);
+    PDA<char> pda(labels);
     pda.add_rule(0, 1, PUSH, 'B', 'A');
     pda.add_rule(0, 0, POP, '*', 'B');
     pda.add_rule(1, 3, SWAP, 'A', 'B');
@@ -78,7 +110,7 @@ BOOST_AUTO_TEST_CASE(UnweightedPreStar)
     pda.add_rule(3, 2, PUSH, 'C', 'A');
 
     std::vector<char> init_stack{'A', 'A'};
-    PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
+    internal::PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
 
     Solver::pre_star(automaton);
 
@@ -94,7 +126,7 @@ BOOST_AUTO_TEST_CASE(UnweightedPostStar)
     // This is pretty much the rules from the example in Figure 3.1 (Schwoon-php02)
     // However r_2 requires a swap and a push, which is done through auxiliary state 3.
     std::unordered_set<char> labels{'A', 'B', 'C'};
-    TypedPDA<char> pda(labels);
+    PDA<char> pda(labels);
     pda.add_rule(0, 1, PUSH, 'B', 'A');
     pda.add_rule(0, 0, POP, '*', 'B');
     pda.add_rule(1, 3, SWAP, 'A', 'B');
@@ -102,7 +134,7 @@ BOOST_AUTO_TEST_CASE(UnweightedPostStar)
     pda.add_rule(3, 2, PUSH, 'C', 'A');
 
     std::vector<char> init_stack{'A', 'A'};
-    PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
+    internal::PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
 
     Solver::post_star(automaton);
 
@@ -121,7 +153,7 @@ BOOST_AUTO_TEST_CASE(UnweightedPostStarPath)
     // This is pretty much the rules from the example in Figure 3.1 (Schwoon-php02)
     // However r_2 requires a swap and a push, which is done through auxiliary state 3.
     std::unordered_set<char> labels{'A', 'B', 'C'};
-    TypedPDA<char> pda(labels);
+    PDA<char> pda(labels);
     pda.add_rule(0, 1, PUSH, 'B', 'A');
     pda.add_rule(0, 0, POP, '*', 'B');
     pda.add_rule(1, 3, SWAP, 'A', 'B');
@@ -129,7 +161,7 @@ BOOST_AUTO_TEST_CASE(UnweightedPostStarPath)
     pda.add_rule(3, 2, PUSH, 'C', 'A');
 
     std::vector<char> init_stack{'A', 'A'};
-    PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
+    internal::PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
 
     Solver::post_star(automaton);
 
@@ -145,7 +177,7 @@ BOOST_AUTO_TEST_CASE(WeightedPreStar)
     // This is pretty much the rules from the example in Figure 3.1 (Schwoon-php02)
     // However r_2 requires a swap and a push, which is done through auxiliary state 3.
     std::unordered_set<char> labels{'A', 'B', 'C'};
-    TypedPDA<char, weight<std::vector<int>>> pda(labels);
+    PDA<char, weight<std::vector<int>>> pda(labels);
     std::vector<int> w{1};
     pda.add_rule(0, 1, PUSH, 'B', 'A', w);
     pda.add_rule(0, 0, POP , '*', 'B', w);
@@ -154,7 +186,7 @@ BOOST_AUTO_TEST_CASE(WeightedPreStar)
     pda.add_rule(3, 2, PUSH, 'C', 'A', w);
 
     std::vector<char> init_stack{'A', 'A'};
-    PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
+    internal::PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
 
     Solver::pre_star(automaton);
 
@@ -168,7 +200,7 @@ BOOST_AUTO_TEST_CASE(WeightedPreStar)
 BOOST_AUTO_TEST_CASE(WeightedPostStar4EarlyTermination)
 {
     std::unordered_set<char> labels{'A'};
-    TypedPDA<char, weight<int>> pda(labels);
+    PDA<char, weight<int>> pda(labels);
 
     pda.add_rule(0, 3, PUSH, 'A', 'A', 4);
     pda.add_rule(0, 1, PUSH , 'A', 'A', 1);
@@ -177,7 +209,7 @@ BOOST_AUTO_TEST_CASE(WeightedPostStar4EarlyTermination)
     pda.add_rule(2, 4, POP , 'A', 'A', 16);
 
     std::vector<char> init_stack{'A'};
-    PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
+    internal::PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
 
     std::vector<char> test_stack_reachable{'A'};
     BOOST_CHECK_EQUAL(Solver::post_star_accepts<Trace_Type::Shortest>(automaton, 4, pda.encode_pre(test_stack_reachable)), true);
@@ -192,7 +224,7 @@ BOOST_AUTO_TEST_CASE(WeightedPostStar)
     // This is pretty much the rules from the example in Figure 3.1 (Schwoon-php02)
     // However r_2 requires a swap and a push, which is done through auxiliary state 3.
     std::unordered_set<char> labels{'A', 'B', 'C'};
-    TypedPDA<char, weight<std::array<double, 3>>> pda(labels);
+    PDA<char, weight<std::array<double, 3>>> pda(labels);
     std::array<double, 3> w{0.5, 1.2, 0.3};
     pda.add_rule(0, 1, PUSH, 'B', 'A', w);
     pda.add_rule(0, 0, POP , '*', 'B', w);
@@ -201,7 +233,7 @@ BOOST_AUTO_TEST_CASE(WeightedPostStar)
     pda.add_rule(3, 2, PUSH, 'C', 'A', w);
 
     std::vector<char> init_stack{'A', 'A'};
-    PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
+    internal::PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
 
     Solver::post_star<Trace_Type::Shortest>(automaton);
 
@@ -215,7 +247,7 @@ BOOST_AUTO_TEST_CASE(WeightedPostStar)
 BOOST_AUTO_TEST_CASE(WeightedPostStar2)
 {
     std::unordered_set<char> labels{'A', 'B'};
-    TypedPDA<char, weight<int>> pda(labels);
+    PDA<char, weight<int>> pda(labels);
 
     pda.add_rule(1, 2, POP, '*', 'A', 1);
     pda.add_rule(1, 3, PUSH , 'B', 'A', 3);
@@ -226,7 +258,7 @@ BOOST_AUTO_TEST_CASE(WeightedPostStar2)
     pda.add_rule(3, 1, POP, '*', 'B', 1);
 
     std::vector<char> init_stack{'A', 'B', 'A'};
-    PAutomaton automaton(pda, 1, pda.encode_pre(init_stack));
+    internal::PAutomaton automaton(pda, 1, pda.encode_pre(init_stack));
 
     Solver::post_star<Trace_Type::Shortest>(automaton);
 
@@ -237,7 +269,7 @@ BOOST_AUTO_TEST_CASE(WeightedPostStar2)
 BOOST_AUTO_TEST_CASE(WeightedPostStar3)
 {
     std::unordered_set<char> labels{'A'};
-    TypedPDA<char, weight<int>> pda(labels);
+    PDA<char, weight<int>> pda(labels);
     std::vector<char> pre{'A'};
 
     pda.add_rule(1, 2, PUSH, 'A', 'A', 16);
@@ -246,7 +278,7 @@ BOOST_AUTO_TEST_CASE(WeightedPostStar3)
     pda.add_rule(3, 2, POP , 'A', 'A', 1);
 
     std::vector<char> init_stack{'A'};
-    PAutomaton automaton(pda, 1, pda.encode_pre(init_stack));
+    internal::PAutomaton automaton(pda, 1, pda.encode_pre(init_stack));
 
     Solver::post_star<Trace_Type::Shortest>(automaton);
 
@@ -257,7 +289,7 @@ BOOST_AUTO_TEST_CASE(WeightedPostStar3)
 BOOST_AUTO_TEST_CASE(WeightedPostStar4)
 {
     std::unordered_set<char> labels{'A'};
-    TypedPDA<char, weight<int>> pda(labels);
+    PDA<char, weight<int>> pda(labels);
 
     pda.add_rule(0, 3, PUSH, 'A', 'A', 4);
     pda.add_rule(0, 1, PUSH , 'A', 'A', 1);
@@ -266,7 +298,7 @@ BOOST_AUTO_TEST_CASE(WeightedPostStar4)
     pda.add_rule(2, 4, POP , 'A', 'A', 16);
 
     std::vector<char> init_stack{'A'};
-    PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
+    internal::PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
 
     Solver::post_star<Trace_Type::Shortest>(automaton);
 
@@ -277,7 +309,7 @@ BOOST_AUTO_TEST_CASE(WeightedPostStar4)
 BOOST_AUTO_TEST_CASE(WeightedPostStarResult)
 {
     std::unordered_set<char> labels{'A'};
-    TypedPDA<char, weight<int>> pda(labels);
+    PDA<char, weight<int>> pda(labels);
 
     pda.add_rule(0, 3, PUSH, 'A', 'A', 4);
     pda.add_rule(0, 1, PUSH , 'A', 'A', 1);
@@ -286,7 +318,7 @@ BOOST_AUTO_TEST_CASE(WeightedPostStarResult)
     pda.add_rule(2, 4, POP , 'A', 'A', 16);
 
     std::vector<char> init_stack{'A'};
-    PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
+    internal::PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
 
     Solver::post_star<Trace_Type::Shortest>(automaton);
 
@@ -302,13 +334,13 @@ BOOST_AUTO_TEST_CASE(WeightedPostStarResult)
     BOOST_CHECK_EQUAL(distance2AA, 14);         //Example Derived on whiteboard
 }
 
-TypedPDA<int,weight<int>> create_syntactic_network_broad(int network_size = 2) {
+PDA<int,weight<int>> create_syntactic_network_broad(int network_size = 2) {
     std::unordered_set<int> labels{0,1,2};
     int start_state = 0;
     int states = 4;
     int end_state = 4;
 
-    TypedPDA<int, weight<int>> pda(labels);
+    PDA<int, weight<int>> pda(labels);
 
     for (int j = 0; j < network_size; j++) {
         pda.add_rule(start_state, 1 + start_state, PUSH, 0, 0, 0);
@@ -337,9 +369,9 @@ TypedPDA<int,weight<int>> create_syntactic_network_broad(int network_size = 2) {
     return pda;
 }
 
-TypedPDA<int,weight<int>> create_syntactic_network_deep(int network_size = 2){
+PDA<int,weight<int>> create_syntactic_network_deep(int network_size = 2){
     std::unordered_set<int> labels{0,1,2};
-    TypedPDA<int, weight<int>> pda(labels);
+    PDA<int, weight<int>> pda(labels);
     int start_state = 0;
     int new_start_state = 4;
     int end_state = 2;
@@ -374,10 +406,10 @@ TypedPDA<int,weight<int>> create_syntactic_network_deep(int network_size = 2){
 
 BOOST_AUTO_TEST_CASE(WeightedPostStarSyntacticModel)
 {
-    TypedPDA<int,weight<int>> pda = create_syntactic_network_broad(1);
+    PDA<int,weight<int>> pda = create_syntactic_network_broad(1);
     std::vector<int> init_stack;
     init_stack.push_back(0);
-    PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
+    internal::PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
 
     Solver::post_star<Trace_Type::Shortest>(automaton);
 
@@ -399,7 +431,7 @@ BOOST_AUTO_TEST_CASE(WeightedPostStarVSPostUnorderedPerformance)
         labels.insert(i);
     }
 
-    TypedPDA<int, weight<int>> pda(labels);
+    PDA<int, weight<int>> pda(labels);
 
     for(int i = 0; i < alphabet_size; i++){
         pda.add_rule(0, 1, SWAP, i, 0, 1);
@@ -413,11 +445,11 @@ BOOST_AUTO_TEST_CASE(WeightedPostStarVSPostUnorderedPerformance)
     std::vector<int> test_stack_reachable;
     test_stack_reachable.push_back(0);
 
-    PAutomaton shortest_automaton(pda, 0, pda.encode_pre(init_stack));
+    internal::PAutomaton shortest_automaton(pda, 0, pda.encode_pre(init_stack));
     auto t1 = std::chrono::high_resolution_clock::now();
     Solver::post_star<Trace_Type::Shortest>(shortest_automaton);
     auto t2 = std::chrono::high_resolution_clock::now();
-    PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
+    internal::PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
     auto t3 = std::chrono::high_resolution_clock::now();
     Solver::post_star<Trace_Type::Any>(automaton);
     auto t4 = std::chrono::high_resolution_clock::now();
@@ -431,7 +463,7 @@ BOOST_AUTO_TEST_CASE(WeightedPostStarVSPostUnorderedPerformance)
 
 BOOST_AUTO_TEST_CASE(WeightedShortestPerformance)
 {
-    TypedPDA<int, weight<int>> pda = create_syntactic_network_deep(200);
+    PDA<int, weight<int>> pda = create_syntactic_network_deep(200);
 
     std::vector<int> init_stack;
     init_stack.push_back(0);
@@ -442,12 +474,12 @@ BOOST_AUTO_TEST_CASE(WeightedShortestPerformance)
     test_stack_reachable.push_back(0);
     test_stack_reachable.push_back(0);
 
-    PAutomaton shortest_automaton(pda, 0, pda.encode_pre(init_stack));
+    internal::PAutomaton shortest_automaton(pda, 0, pda.encode_pre(init_stack));
     auto t1 = std::chrono::high_resolution_clock::now();
     Solver::post_star<Trace_Type::Shortest>(shortest_automaton);
     auto t2 = std::chrono::high_resolution_clock::now();
 
-    PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
+    internal::PAutomaton automaton(pda, 0, pda.encode_pre(init_stack));
     auto t3 = std::chrono::high_resolution_clock::now();
     Solver::post_star<Trace_Type::Any>(automaton);
     auto t4 = std::chrono::high_resolution_clock::now();
