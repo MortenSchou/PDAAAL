@@ -48,7 +48,7 @@ jobs:
             name: "Windows_gcc",
             os: windows-latest,
             cxx: "cl",
-            generators: "Visual Studio 16 2019",
+            generators: "Visual Studio 17 2022",
             boost_dir: \stage\lib\cmake\Boost-1.78.0\,
             boost_platform_version: "2019",
             boost_toolset: "msvc"
