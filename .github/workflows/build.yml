@@ -13,14 +13,14 @@ concurrency:
 
 jobs:
   build:
-    name: ${{ matrix.config.name }}
+    name: ${{ matrix.config.name }}-${{ matrix.build_type }}
     runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
       matrix:
         config:
           - {
-            name: "Ubuntu_gcc",
+            name: "Ubuntu-gcc",
             os: ubuntu-latest,
             cxx: "g++-10",
             generators: "Ninja",
@@ -29,7 +29,7 @@ jobs:
             boost_toolset: "gcc"
           }
           - {
-            name: "Ubuntu_clang",
+            name: "Ubuntu-clang",
             os: ubuntu-latest,
             cxx: "clang++-12",
             generators: "Ninja",
@@ -38,14 +38,14 @@ jobs:
             boost_toolset: "gcc"
           }
           - {
-            name: "Macos_clang",
+            name: "Macos-clang",
             os: macos-latest,
             cxx: "clang++",
             generators: "Ninja",
             boost_dir: ""
           }
           - {
-            name: "Windows_gcc",
+            name: "Windows-msvc",
             os: windows-latest,
             cxx: "cl",
             generators: "Visual Studio 17 2022",

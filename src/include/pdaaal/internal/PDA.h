@@ -39,6 +39,14 @@
 #include <functional>
 #include <type_traits>
 
+#ifdef __GNUC__
+#define PACK(...) __VA_ARGS__ __attribute__((__packed__))
+#elif defined(_MSC_VER)
+#define PACK(...) __pragma( pack(push, 1) ) __VA_ARGS__ __pragma( pack(pop))
+#else
+#define PACK(...) __VA_ARGS__
+#endif
+
 namespace pdaaal {
     enum op_t {
         PUSH = 1,
@@ -146,7 +154,7 @@ namespace pdaaal::internal {
 namespace pdaaal {
     template<typename W, typename = void>
     struct user_rule_t;
-    template<typename W>
+    PACK(template<typename W>
     struct user_rule_t<W, std::enable_if_t<!is_weighted<W>>> {
         size_t _from = std::numeric_limits<size_t>::max();
         size_t _to = std::numeric_limits<size_t>::max();
@@ -175,7 +183,7 @@ namespace pdaaal {
         internal::pda_rule_t<W> to_impl_rule() const {
             return internal::pda_rule_t<W>{_to, _op, _op_label};
         }
-    } __attribute__((packed)); // packed is used to make this work fast with ptries
+    }); // packed is used to make this work fast with ptries
     template<typename W>
     struct user_rule_t<W, std::enable_if_t<is_weighted<W>>> {
         size_t _from = std::numeric_limits<size_t>::max();
