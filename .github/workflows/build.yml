@@ -38,20 +38,20 @@ jobs:
             boost_toolset: "gcc"
           }
           - {
-            name: "macos_clang",
+            name: "Macos_clang",
             os: macos-latest,
             cxx: "clang++",
             generators: "Ninja",
             boost_dir: ""
           }
           - {
-            name: "windows_gcc",
+            name: "Windows_gcc",
             os: windows-latest,
-            cxx: "g++",
-            generators: "Ninja",
+            cxx: "cl",
+            generators: "Visual Studio 16 2019",
             boost_dir: \stage\lib\cmake\Boost-1.78.0\,
             boost_platform_version: "2019",
-            boost_toolset: "mingw"
+            boost_toolset: "msvc"
           }
         build_type: ["Debug","Release"]
 
@@ -80,7 +80,7 @@ jobs:
           ninja --version
           cmake --version
 
-      - name: Install boost on ubuntu
+      - name: Install boost (ubuntu or windows)
         if: startsWith(matrix.config.os, 'ubuntu') || startsWith(matrix.config.os, 'windows')
         uses: MarkusJx/install-boost@v2.1.0
         id: install-boost
@@ -110,3 +110,11 @@ jobs:
         run: |
           cd build
           ctest
+
+      # Upload artifact
+      - name: Upload artifact pdaaal
+        if: ${{ matrix.build_type == "Release" && matrix.config.name != "Ubuntu_clang" }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: pdaaal-${{ matrix.config-os }}
+          path: build/bin/pdaaal
