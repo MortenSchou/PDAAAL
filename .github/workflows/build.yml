@@ -45,7 +45,7 @@ jobs:
             os: windows-latest,
             cxx: "g++",
             generators: "Ninja",
-            boost_dir: "\stage\lib\cmake\Boost-1.78.0\"
+            boost_dir: \stage\lib\cmake\Boost-1.78.0\
           }
         build_type: ["Debug","Release"]
 
