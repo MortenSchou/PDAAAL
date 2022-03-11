@@ -20,26 +20,29 @@ jobs:
       # Install boost
       - name: Install boost
         run: |
-          brew install boost
+          brew install boost ninja
+
+      # Configure cmake to build with Ninja Multi-Config
+      - name: Configure
+        run: |
+          mkdir -p build
+          cd build
+          cmake -DCMAKE_CXX_COMPILER=clang++ -G "Ninja Multi-Config" -DCMAKE_CONFIGURATION_TYPES="Debug;Release" ..
+
       # Build and test in debug mode
       - name: Build debug
         run: |
-          mkdir -p build-debug
-          cd build-debug
-          CC=clang CXX=clang++ cmake -DCMAKE_BUILD_TYPE=Debug ..
-          make -j
+          cd build
+          cmake --build . --config Debug
       - name: Test debug
         run: |
-          cd build-debug
-          make test
-      # Build and test in release mode
+          cd build
+          ctest -C Debug
+      # Build and test in debug mode
       - name: Build release
         run: |
-          mkdir -p build-release
-          cd build-release
-          CC=clang CXX=clang++ cmake -DCMAKE_BUILD_TYPE=Release ..
-          make -j
+          cd build
+          cmake --build . --config Release
       - name: Test release
         run: |
-          cd build-release
-          make test
+          cd build
