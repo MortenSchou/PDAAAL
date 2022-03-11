@@ -2,7 +2,7 @@ name: Build
 
 on:
   push:
-    branches: [ main, build-windows ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -24,14 +24,14 @@ jobs:
             os: ubuntu-latest,
             cxx: "g++-10",
             generators: "Ninja",
-            boost_dir: "${{ env.GITHUB_WORKSPACE }}/boost/boost/lib/cmake/Boost-1.78.0/"
+            boost_dir: "lib/cmake/Boost-1.78.0/"
           }
           - {
             name: "Ubuntu_clang",
             os: ubuntu-latest,
             cxx: "clang++-12",
             generators: "Ninja",
-            boost_dir: "${{ env.GITHUB_WORKSPACE }}/boost/boost/lib/cmake/Boost-1.78.0/"
+            boost_dir: "lib/cmake/Boost-1.78.0/"
           }
           - {
             name: "macos_clang",
@@ -87,7 +87,7 @@ jobs:
           cd build
           cmake -DCMAKE_CXX_COMPILER=${{ matrix.config.cxx }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -G "${{ matrix.config.generators }}" ..
         env:
-          Boost_DIR: ${{ matrix.config.boost_dir }}
+          Boost_DIR: ${{ steps.install-boost.outputs.BOOST_ROOT }}/${{ matrix.config.boost_dir }}
       # Build and test in debug mode
       - name: Build debug
         run: |
