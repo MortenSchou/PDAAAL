@@ -1,0 +1,108 @@
+name: Build
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {
+            name: "Ubuntu_gcc",
+            os: ubuntu-latest,
+            cxx: "g++-10",
+            generators: "Ninja",
+            boost_dir: "${{ steps.install-boost.outputs.BOOST_ROOT }}/lib/cmake/Boost-1.78.0/"
+          }
+          - {
+            name: "Ubuntu_clang",
+            os: ubuntu-latest,
+            cxx: "clang++-12",
+            generators: "Ninja",
+            boost_dir: "${{ steps.install-boost.outputs.BOOST_ROOT }}/lib/cmake/Boost-1.78.0/"
+          }
+          - {
+            name: "macos_clang",
+            os: macos-latest,
+            cxx: "clang++",
+            generators: "Ninja",
+            boost_dir: ""
+          }
+        build_type: ["Debug","Release"]
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install dependencies on macos
+        if: startsWith(matrix.config.os, 'macos')
+        run: |
+          brew install boost ninja
+          ninja --version
+          cmake --version
+
+#      - name: Install dependencies on windows
+#        if: startsWith(matrix.config.os, 'windows')
+#        run: |
+#          choco install ninja cmake
+#          ninja --version
+#          cmake --version
+
+      - name: Install dependencies on ubuntu
+        if: startsWith(matrix.config.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install ninja-build
+          ninja --version
+          cmake --version
+
+      - name: Install boost on ubuntu
+        if: startsWith(matrix.config.os, 'ubuntu')
+        uses: MarkusJx/install-boost@v2.1.0
+        id: install-boost
+        with:
+          # Set the boost version (required)
+          boost_version: 1.78.0
+          # OPTIONAL: Specify a platform version
+          platform_version: 20.04
+          # OPTIONAL: Specify a toolset
+          toolset: gcc
+
+      # Configure cmake to build with Ninja Multi-Config
+      - name: Configure
+        shell: bash
+        run: |
+          mkdir -p build
+          cd build
+          cmake -DCMAKE_CXX_COMPILER=${{ matrix.config.cxx }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -G "${{ matrix.config.generators }}" ..
+        env:
+          Boost_DIR: ${{ matrix.config.boost_dir }}
+      # Build and test in debug mode
+      - name: Build debug
+        run: |
+          cd build
+          cmake --build . --config Debug
+      - name: Test debug
+        run: |
+          cd build
+          ctest -C Debug
+      # Build and test in debug mode
+      - name: Build release
+        run: |
+          cd build
+          cmake --build . --config Release
+      - name: Test release
+        run: |
+          cd build
+          ctest -C Release
