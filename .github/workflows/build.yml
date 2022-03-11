@@ -24,14 +24,14 @@ jobs:
             os: ubuntu-latest,
             cxx: "g++-10",
             generators: "Ninja",
-            boost_dir: "${{ steps.install-boost.outputs.BOOST_ROOT }}/lib/cmake/Boost-1.78.0/"
+            boost_dir: "${{ env.GITHUB_WORKSPACE }}/boost/boost/lib/cmake/Boost-1.78.0/"
           }
           - {
             name: "Ubuntu_clang",
             os: ubuntu-latest,
             cxx: "clang++-12",
             generators: "Ninja",
-            boost_dir: "${{ steps.install-boost.outputs.BOOST_ROOT }}/lib/cmake/Boost-1.78.0/"
+            boost_dir: "${{ env.GITHUB_WORKSPACE }}/boost/boost/lib/cmake/Boost-1.78.0/"
           }
           - {
             name: "macos_clang",
