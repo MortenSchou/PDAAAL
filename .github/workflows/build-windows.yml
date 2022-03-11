@@ -41,7 +41,7 @@ jobs:
         run: |
           mkdir -p build-debug
           cd build-debug
-          CC=gcc CXX=g++ cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Debug ..
+          cmake -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -G "Ninja" -DCMAKE_BUILD_TYPE=Debug ..
           make
         env:
           Boost_DIR: ${{ steps.install-boost.outputs.BOOST_ROOT }}\stage\lib\cmake\Boost-1.78.0\
@@ -55,7 +55,7 @@ jobs:
         run: |
           mkdir -p build-release
           cd build-release
-          CC=gcc CXX=g++ cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release ..
+          cmake -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -G "Ninja" -DCMAKE_BUILD_TYPE=Release ..
           make
         env:
           Boost_DIR: ${{ steps.install-boost.outputs.BOOST_ROOT }}\stage\lib\cmake\Boost-1.78.0\
