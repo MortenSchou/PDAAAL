@@ -28,10 +28,12 @@
 #define PDAAAL_REFINEMENT_H
 
 #include <vector>
+#include <array>
 #include <algorithm>
 #include <cassert>
 #include <limits>
 #include <unordered_set>
+#include <iterator>
 
 namespace pdaaal {
 
