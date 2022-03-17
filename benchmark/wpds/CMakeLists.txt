@@ -14,8 +14,12 @@ ExternalProject_add(wpds
     INSTALL_COMMAND ""
 )
 ExternalProject_Get_property(wpds SOURCE_DIR)
+add_custom_target(wpds-fix-file ALL
+    COMMAND sed -i "263s/    ref_ptr/    explicit ref_ptr/" ${SOURCE_DIR}/ref_ptr.h
+)
+add_dependencies(wpds-fix-file wpds)
 add_library(wpds-lib INTERFACE)
-add_dependencies(wpds-lib wpds)
+add_dependencies(wpds-lib wpds-fix-file wpds)
 add_library(wpds::wpds-lib ALIAS wpds-lib)
 
 include(GNUInstallDirs)
