@@ -46,12 +46,14 @@ endif(PDAAAL_AddressSanitizer)
 find_package(Boost 1.70 CONFIG REQUIRED COMPONENTS headers program_options unit_test_framework)
 
 #actual library
-add_subdirectory(src)
+add_subdirectory(src/include)
+#benchmark against wpds++
+add_subdirectory(benchmark)
+if (PDAAAL_Build_Main)
+    add_subdirectory(src/pdaaal-bin)
+endif()
 
 if(PDAAAL_BuildTests)
-    #benchmark
-    add_subdirectory(benchmark)
-
     #testing
     add_subdirectory(test)
     enable_testing()

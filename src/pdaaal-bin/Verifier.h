@@ -30,6 +30,7 @@
 #include "parsing/PAutomatonParser.h"
 #include "parsing/PAutomatonJsonParser.h"
 #include <pdaaal/Solver.h>
+#include <wpds-pdaaal/WPDS_Verifier.h>
 
 namespace pdaaal {
 
@@ -74,9 +75,9 @@ namespace pdaaal {
 
     class Verifier {
     public:
-        explicit Verifier(const std::string& caption) : verification_options{caption} {
+        explicit Verifier(const std::string& caption) : verification_options(caption) {
             verification_options.add_options()
-                    ("engine,e", po::value<size_t>(&engine), "Engine. 0=no verification, 1=post*, 2=pre*, 3=dual*")
+                    ("engine,e", po::value<size_t>(&engine), "Engine. 0=no verification, 1=post*, 2=pre*, 3=dual*, 4=WPDS++post*, 5=WPDS++pre*")
                     ("trace,t", po::value<Trace_Type>(&trace_type)->default_value(Trace_Type::None), "Trace type. 0=no trace, 1=any trace, 2=shortest trace, 3=longest trace, 4=fixed-point shortest trace")
                     ;
         }
@@ -84,6 +85,98 @@ namespace pdaaal {
 
         [[nodiscard]] bool needs_trace_info_pair() const {
             return trace_type == Trace_Type::Longest || trace_type == Trace_Type::ShortestFixedPoint;
+        }
+        [[nodiscard]] bool use_wpds() const {
+            return engine == 4 || engine == 5;
+        }
+        [[nodiscard]] bool is_wpds_prestar() const {
+            return engine == 5;
+        }
+        template <typename instance_t>
+        void verify_wpds(instance_t& instance) {
+            if (!use_wpds()) return;
+
+            using pda_t = std20::remove_cvref_t<decltype(instance.pda())>;
+            using W = typename pda_t::weight;
+            if constexpr(W::is_signed) {
+                throw std::runtime_error("Signed weight is not supported for WPDS++ engine.");
+                return;
+            } else {
+                using WPDS_Weight = std::conditional_t<W::is_weight, std::conditional_t<W::is_vector, wpds_pdaaal::VectorUintWeight, wpds_pdaaal::UintWeight>, wpds_pdaaal::Reach>;
+                bool pre_star = is_wpds_prestar();
+                auto s = wpds::Semiring<WPDS_Weight>(WPDS_Weight::one());
+                using rule_t = wpds_pdaaal::WPDS_Rule<WPDS_Weight>;
+                wpds::WPDS<WPDS_Weight> pda(s, pre_star ? Query::prestar() : Query::poststar());
+                size_t from_state = 0;
+                for (const auto& state : instance.pda().states()) {
+                    auto from = rule_t::key_from_size_t(from_state);
+                    for (const auto& [rule, labels] : state._rules) {
+                        auto r = rule;
+                        auto to = rule_t::key_from_size_t(rule._to);
+                        auto apply = [&pda,&r,&from,&to](const auto& pre) {
+                            rule_t wpds_rule(from, pre, to);
+                            if constexpr (W::is_weight) {
+                                if constexpr (W::is_vector) {
+                                    wpds_rule._weight = new wpds_pdaaal::VectorUintWeight(r._weight);
+                                } else {
+                                    wpds_rule._weight = new wpds_pdaaal::UintWeight(r._weight);
+                                }
+                            } else {
+                                wpds_rule._weight = wpds_pdaaal::Reach::one();
+                            }
+                            switch (r._operation) {
+                                case PUSH:
+                                    wpds_rule._l1 = rule_t::key_from_size_t(r._op_label);
+                                    wpds_rule._l2 = pre;
+                                    break;
+                                case SWAP:
+                                    wpds_rule._l1 = rule_t::key_from_size_t(r._op_label);
+                                    break;
+                                case NOOP:
+                                    wpds_rule._l1 = wpds_rule._pre;
+                                    break;
+                                case POP:
+                                default:
+                                    break;
+                            }
+                            if (!wpds_rule._l1 && !wpds_rule._l2) {
+                                pda.add_rule(wpds_rule._from, wpds_rule._pre, wpds_rule._to, wpds_rule._weight);
+                            } else if (wpds_rule._l1 && !wpds_rule._l2) {
+                                pda.add_rule(wpds_rule._from, wpds_rule._pre, wpds_rule._to, wpds_rule._l1.value(), wpds_rule._weight);
+                            } else if (wpds_rule._l1 && wpds_rule._l2) {
+                                pda.add_rule(wpds_rule._from, wpds_rule._pre, wpds_rule._to, wpds_rule._l1.value(), wpds_rule._l2.value(), wpds_rule._weight);
+                            } else {
+                                throw std::logic_error("Invalid rule contains l2 but no l1.");
+                            }
+                        };
+                        if (labels.wildcard()) {
+                            for (size_t i = 0; i < instance.pda().number_of_labels(); ++i) {
+                                apply(rule_t::key_from_size_t(i));
+                            }
+                        } else {
+                            for (const auto& pre : labels.labels()) {
+                                apply(rule_t::key_from_size_t(pre));
+                            }
+                        }
+                    }
+                    ++from_state;
+                }
+                wpds_pdaaal::WPDS_SolverInstance<WPDS_Weight> problem_instance(pda, instance.initial_automaton(), instance.final_automaton(), instance.pda().states().size(), s);
+
+                bool result;
+                ref_ptr<WPDS_Weight> weight;
+                if (pre_star) {
+                    std::tie(result, weight) = problem_instance.pre_star();
+                } else {
+                    std::tie(result, weight) = problem_instance.post_star();
+                }
+                if (result) {
+                    if constexpr (W::is_weight) {
+                        std::cout << "Weight: "; weight->print(std::cout) << std::endl;
+                    }
+                }
+                std::cout << ((result) ? "Reachable" : "Not reachable") << std::endl;
+            }
         }
 
         template <TraceInfoType trace_info_type = TraceInfoType::Single, typename instance_t>

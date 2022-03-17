@@ -31,6 +31,7 @@
 // WPDS include must come after pdaaal include. Because otherwise we get compile errors in abseil, yeah...%&#!¤#
 #include <WPDS.h>
 #include <ref_ptr.h>
+#include <utility>
 
 
 namespace wpds_pdaaal {
@@ -103,6 +104,60 @@ namespace wpds_pdaaal {
         }
     };
 
+    class VectorUintWeight {
+        std::vector<uint32_t> weight;
+    public:
+        ref_ptr< VectorUintWeight >::count_t count;
+        explicit VectorUintWeight(const std::vector<uint32_t>& b) : weight(b), count(0) {}
+        explicit VectorUintWeight(std::vector<uint32_t>&& b) : weight(std::move(b)), count(0) {}
+        static VectorUintWeight* one() { return new VectorUintWeight(std::vector<uint32_t>()); }
+        static VectorUintWeight* zero() { return new VectorUintWeight(std::vector<uint32_t>{std::numeric_limits<uint32_t>::max()}); }
+        static VectorUintWeight* quasiOne() { return one(); }
+        // zero is the annihilator for extend
+        VectorUintWeight* extend( VectorUintWeight* rhs ) const {
+            if (is_zero() || rhs->is_zero()) {
+                return zero();
+            } else {
+                const auto& [small, large] = std::minmax(weight, rhs->weight, [](const auto& l, const auto& r){ return l.size() < r.size(); });
+                auto result = large;
+                std::transform(small.begin(), small.end(), large.begin(),
+                               result.begin(), std::plus<uint32_t>());
+                return new VectorUintWeight(std::move(result));
+            }
+        }
+        // zero is neutral for combine
+        VectorUintWeight* combine( VectorUintWeight* rhs ) const {
+            if(is_zero() && rhs->is_zero()) {
+                return zero();
+            } else {
+                return new VectorUintWeight(std::min(weight, rhs->weight));
+            }
+        }
+        bool equal( VectorUintWeight* rhs ) const {
+            return ( weight == rhs->weight );
+        }
+        std::ostream& print( std::ostream& o ) const {
+            if (is_zero()) {
+                o << "ZERO";
+            } else {
+                bool first = true;
+                o << "[";
+                for (const auto& elem : weight) {
+                    if (!first) o << ",";
+                    first = false;
+                    o << elem;
+                }
+                o << "]";
+
+            }
+            return o;
+        }
+    private:
+        [[nodiscard]] bool is_zero() const {
+            return weight.size() == 1 && weight[0] == std::numeric_limits<uint32_t>::max();
+        }
+    };
+
     template <typename W>
     struct WPDS_Rule {
         wpds::wpds_key_t _from;
@@ -149,9 +204,6 @@ namespace wpds_pdaaal {
     template <typename W>
     class WPDS_SolverInstance {
     public:
-//        using pda_t = TypedPDA<T,W,fut::type::vector,state_t,skip_state_mapping>;
-//        using pautomaton_t = PAutomaton<W>;
-//        using product_t = PAutomatonProduct<pda_t, pautomaton_t, W>;
         WPDS_SolverInstance(wpds::WPDS<W>& pda,
                         const pdaaal::NFA<size_t>& initial_nfa, const std::vector<size_t>& initial_states,
                         const pdaaal::NFA<size_t>& final_nfa,   const std::vector<size_t>& final_states,
@@ -160,6 +212,36 @@ namespace wpds_pdaaal {
                   _initial(make_CA(initial_nfa, initial_states, all_labels, max_pda_state, s)),
                   _final(make_CA(final_nfa, final_states, all_labels, max_pda_state, s)),
                   _s(s), _answer(_s) {};
+        template<typename automaton_t>
+        WPDS_SolverInstance(wpds::WPDS<W>& pda, const automaton_t& initial, const automaton_t& final, size_t max_pda_state, wpds::Semiring<W>& s)
+                : _pda(pda), _initial(make_CA(initial, max_pda_state, s)), _final(make_CA(final, max_pda_state, s)), _s(s), _answer(_s) {};
+
+        template<typename automaton_t>
+        static wpds::CA<W> make_CA(const automaton_t& p_automaton, size_t max_pda_state, wpds::Semiring<W>& s) {
+            wpds::CA<W> automaton(s);
+
+            for (const auto& state : p_automaton.states()) {
+                for (const auto& [to, labels] : state->_edges) {
+                    auto from_key = WPDS_Rule<W>::key_from_size_t(state->_id);
+                    auto to_key = WPDS_Rule<W>::key_from_size_t(to);
+                    for (auto [label,_] : labels) {
+                        automaton.add(from_key, WPDS_Rule<W>::key_from_size_t(label), to_key, W::one());
+                    }
+                }
+            }
+
+            // WPDS::CA supports only a single initial state. We simulate multiple initial states using epsilon transitions.
+            automaton.add_initial_state(str2key("initial"));
+            for (size_t pda_state = 0; pda_state < max_pda_state; ++pda_state) { // Yes this is hacky...
+                auto to = WPDS_Rule<W>::key_from_size_t(pda_state);
+                std::stringstream ss;
+                ss << pda_state;
+                auto label = str2key(ss.str()); // We need the label to be different from the normal labels. So we use string-to-key.
+                automaton.add(automaton.initial_state(), label, to, W::one());
+            }
+
+            return automaton;
+        }
 
         static wpds::CA<W> make_CA(const pdaaal::NFA<size_t>& nfa, const std::vector<size_t>& initial_states,
                                    const std::vector<wpds::wpds_key_t>& all_labels, size_t max_pda_state, wpds::Semiring<W>& s) {

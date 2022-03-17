@@ -43,6 +43,7 @@ target_sources(pdaaal-bin
 )
 target_link_libraries(pdaaal-bin
         PRIVATE pdaaal
+                wpds-pdaaal::wpds-pdaaal
                 Boost::program_options
 )
 if (MSVC)
