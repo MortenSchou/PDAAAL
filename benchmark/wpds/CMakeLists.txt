@@ -15,7 +15,10 @@ ExternalProject_add(wpds
 )
 ExternalProject_Get_property(wpds SOURCE_DIR)
 add_custom_target(wpds-fix-file ALL
+    COMMAND touch -r ${SOURCE_DIR}/ref_ptr.h timestamp
     COMMAND sed -i "263s/    ref_ptr/    explicit ref_ptr/" ${SOURCE_DIR}/ref_ptr.h
+    COMMAND touch -r timestamp ${SOURCE_DIR}/ref_ptr.h
+    COMMAND rm timestamp
 )
 add_dependencies(wpds-fix-file wpds)
 add_library(wpds-lib INTERFACE)
