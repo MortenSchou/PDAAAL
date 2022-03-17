@@ -163,8 +163,8 @@ namespace wpds_pdaaal {
         wpds::wpds_key_t _from;
         wpds::wpds_key_t _pre;
         wpds::wpds_key_t _to{};
-        std::optional<wpds::wpds_key_t> _l1 = std::nullopt;
-        std::optional<wpds::wpds_key_t> _l2 = std::nullopt;
+        wpds::wpds_key_t _l1 = ::wpds::WPDS_EPSILON;
+        wpds::wpds_key_t _l2 = ::wpds::WPDS_EPSILON;
         W* _weight = nullptr;
 
         WPDS_Rule(wpds::wpds_key_t from, wpds::wpds_key_t pre) : _from(from), _pre(pre) {};
@@ -173,10 +173,10 @@ namespace wpds_pdaaal {
                 : _from(from), _pre(pre), _to(to), _l1(l1), _l2(l2), _weight(weight) {};
 
         static WPDS_Rule<W> make_pop(wpds::wpds_key_t from, wpds::wpds_key_t pre, wpds::wpds_key_t to, W* weight) {
-            return WPDS_Rule<W>(from, pre, to, std::nullopt, std::nullopt, weight);
+            return WPDS_Rule<W>(from, pre, to, ::wpds::WPDS_EPSILON, ::wpds::WPDS_EPSILON, weight);
         }
         static WPDS_Rule<W> make_swap(wpds::wpds_key_t from, wpds::wpds_key_t pre, wpds::wpds_key_t to, wpds::wpds_key_t op_label, W* weight) {
-            return WPDS_Rule<W>(from, pre, to, op_label, std::nullopt, weight);
+            return WPDS_Rule<W>(from, pre, to, op_label, ::wpds::WPDS_EPSILON, weight);
         }
         static WPDS_Rule<W> make_push(wpds::wpds_key_t from, wpds::wpds_key_t pre, wpds::wpds_key_t to, wpds::wpds_key_t op_label, W* weight) {
             return WPDS_Rule<W>(from, pre, to, pre, op_label, weight);
@@ -221,8 +221,11 @@ namespace wpds_pdaaal {
             wpds::CA<W> automaton(s);
 
             for (const auto& state : p_automaton.states()) {
+                auto from_key = WPDS_Rule<W>::key_from_size_t(state->_id);
+                if (state->_accepting) {
+                    automaton.add_final_state(from_key);
+                }
                 for (const auto& [to, labels] : state->_edges) {
-                    auto from_key = WPDS_Rule<W>::key_from_size_t(state->_id);
                     auto to_key = WPDS_Rule<W>::key_from_size_t(to);
                     for (auto [label,_] : labels) {
                         automaton.add(from_key, WPDS_Rule<W>::key_from_size_t(label), to_key, W::one());
@@ -396,15 +399,7 @@ namespace wpds_pdaaal {
             if (rule._weight == nullptr) {
                 rule._weight = W::one(); // Default weight.
             }
-            if (!rule._l1 && !rule._l2) {
-                _temp_pda.add_rule(rule._from, rule._pre, rule._to, rule._weight);
-            } else if (rule._l1 && !rule._l2) {
-                _temp_pda.add_rule(rule._from, rule._pre, rule._to, rule._l1.value(), rule._weight);
-            } else if (rule._l1 && rule._l2){
-                _temp_pda.add_rule(rule._from, rule._pre, rule._to, rule._l1.value(), rule._l2.value(), rule._weight);
-            } else {
-                throw std::logic_error("Invalid rule contains l2 but no l1.");
-            }
+            _temp_pda.add_rule(rule._from, rule._pre, rule._to, rule._l1, rule._l2, rule._weight);
         }
         void add_wildcard_rule(rule_t rule) {
             for (const auto& pre : _all_labels) {

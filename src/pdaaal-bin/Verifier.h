@@ -139,15 +139,7 @@ namespace pdaaal {
                                 default:
                                     break;
                             }
-                            if (!wpds_rule._l1 && !wpds_rule._l2) {
-                                pda.add_rule(wpds_rule._from, wpds_rule._pre, wpds_rule._to, wpds_rule._weight);
-                            } else if (wpds_rule._l1 && !wpds_rule._l2) {
-                                pda.add_rule(wpds_rule._from, wpds_rule._pre, wpds_rule._to, wpds_rule._l1.value(), wpds_rule._weight);
-                            } else if (wpds_rule._l1 && wpds_rule._l2) {
-                                pda.add_rule(wpds_rule._from, wpds_rule._pre, wpds_rule._to, wpds_rule._l1.value(), wpds_rule._l2.value(), wpds_rule._weight);
-                            } else {
-                                throw std::logic_error("Invalid rule contains l2 but no l1.");
-                            }
+                            pda.add_rule(wpds_rule._from, wpds_rule._pre, wpds_rule._to, wpds_rule._l1, wpds_rule._l2, wpds_rule._weight);
                         };
                         if (labels.wildcard()) {
                             for (size_t i = 0; i < instance.pda().number_of_labels(); ++i) {
