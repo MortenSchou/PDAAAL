@@ -94,7 +94,7 @@ namespace pdaaal {
             return engine == 5;
         }
         template <typename instance_t>
-        void verify_wpds(instance_t& instance) {
+        void verify_wpds(instance_t& instance, json_stream& json_out) {
             if (!use_wpds()) return;
 
             using pda_t = std20::remove_cvref_t<decltype(instance.pda())>;
@@ -105,6 +105,8 @@ namespace pdaaal {
             } else {
                 using WPDS_Weight = std::conditional_t<W::is_weight, std::conditional_t<W::is_vector, wpds_pdaaal::VectorUintWeight, wpds_pdaaal::UintWeight>, wpds_pdaaal::Reach>;
                 bool pre_star = is_wpds_prestar();
+                json_out.entry("engine", pre_star ? "WPDS-pre*" : "WPDS-post*");
+                stopwatch construction_time;
                 auto s = wpds::Semiring<WPDS_Weight>(WPDS_Weight::one());
                 using rule_t = wpds_pdaaal::WPDS_Rule<WPDS_Weight>;
                 wpds::WPDS<WPDS_Weight> pda(s, pre_star ? Query::prestar() : Query::poststar());
@@ -155,7 +157,9 @@ namespace pdaaal {
                     ++from_state;
                 }
                 wpds_pdaaal::WPDS_SolverInstance<WPDS_Weight> problem_instance(pda, instance.initial_automaton(), instance.final_automaton(), instance.pda().states().size(), s);
-
+                construction_time.stop();
+                json_out.entry("construction_time", construction_time.duration());
+                stopwatch reachability_time;
                 bool result;
                 ref_ptr<WPDS_Weight> weight;
                 if (pre_star) {
@@ -163,12 +167,14 @@ namespace pdaaal {
                 } else {
                     std::tie(result, weight) = problem_instance.post_star();
                 }
+                reachability_time.stop();
+                json_out.entry("rtime", reachability_time.duration());
                 if (result) {
                     if constexpr (W::is_weight) {
-                        std::cout << "Weight: "; weight->print(std::cout) << std::endl;
+                        json_out.entry("weight", weight->to_json());
                     }
                 }
-                std::cout << ((result) ? "Reachable" : "Not reachable") << std::endl;
+                json_out.entry("result", result);
             }
         }
 

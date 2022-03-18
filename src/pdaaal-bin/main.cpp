@@ -118,10 +118,11 @@ int main(int argc, const char** argv) {
 
     if (verifier.use_wpds()) {
         auto instance_variant = parsing.parse_instance<TraceInfoType::Single>();
-        if (!output.silent) { std::cout << "Parsing duration: " << parsing.duration() << std::endl; }
-        std::visit([&verifier,&output](auto&& instance) {
+        json_stream json_out;
+        if (!output.silent) { json_out.entry("parsing-duration", parsing.duration()); }
+        std::visit([&verifier,&output,&json_out](auto&& instance) {
             output.do_output(instance);
-            verifier.verify_wpds(*instance);
+            verifier.verify_wpds(*instance,json_out);
         }, instance_variant);
         return 0;
     }

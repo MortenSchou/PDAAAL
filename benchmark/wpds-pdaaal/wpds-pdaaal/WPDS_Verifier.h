@@ -68,6 +68,9 @@ namespace wpds_pdaaal {
                 o << "ZERO";
             return o;
         }
+        nlohmann::json to_json() const {
+            return isreached;
+        }
     };
 
     class UintWeight {
@@ -80,27 +83,37 @@ namespace wpds_pdaaal {
         static UintWeight* quasiOne() { return one(); }
         // zero is the annihilator for extend
         UintWeight* extend( UintWeight* rhs ) const {
-            if (weight != std::numeric_limits<uint32_t>::max() && rhs->weight != std::numeric_limits<uint32_t>::max())
-                return new UintWeight(weight + rhs->weight);
-            else // this or rhs is zero()
+            if (is_zero() || rhs->is_zero()) {
                 return zero();
+            } else {
+                return new UintWeight(weight + rhs->weight);
+            }
         }
         // zero is neutral for combine
         UintWeight* combine( UintWeight* rhs ) const {
-            if(weight != std::numeric_limits<uint32_t>::max() || rhs->weight != std::numeric_limits<uint32_t>::max())
-                return new UintWeight(std::min(weight, rhs->weight));
-            else
+            if (is_zero() && rhs->is_zero()) {
                 return zero();
+            } else {
+                return new UintWeight(std::min(weight, rhs->weight));
+            }
         }
         bool equal( UintWeight* rhs ) const {
             return ( weight == rhs->weight );
         }
         std::ostream& print( std::ostream& o ) const {
-            if( weight != std::numeric_limits<uint32_t>::max() )
-                o << weight;
-            else
+            if(is_zero()) {
                 o << "ZERO";
+            } else {
+                o << weight;
+            }
             return o;
+        }
+        nlohmann::json to_json() const {
+            return is_zero() ? json() : json(weight);
+        }
+    private:
+        [[nodiscard]] bool is_zero() const {
+            return weight == std::numeric_limits<uint32_t>::max();
         }
     };
 
@@ -151,6 +164,9 @@ namespace wpds_pdaaal {
 
             }
             return o;
+        }
+        nlohmann::json to_json() const {
+            return is_zero() ? json() : json(weight);
         }
     private:
         [[nodiscard]] bool is_zero() const {
