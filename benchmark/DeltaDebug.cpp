@@ -29,6 +29,7 @@
 #include <iostream>
 #include <filesystem>
 #include <optional>
+#include <unordered_set>
 #include <boost/program_options.hpp>
 
 #include <nlohmann/json.hpp>
@@ -196,20 +197,6 @@ void initiate(std::istream& input_stream) {
         }
     }
     auto visit_automaton = [&dd](const json& automaton, size_t type){
-//        auto visit_state = [&dd,type](const json& state, const json& from){
-//            for (const auto& edge : state["edges"]) {
-//                dd.test_case().emplace_back();
-//                dd.test_case().back()["type"] = type;
-//                dd.test_case().back()["from"] = from;
-//                dd.test_case().back()["edge"] = edge;
-//            }
-//            if (state.contains("accepting") && state["accepting"].get<bool>()) {
-//                dd.test_case().emplace_back();
-//                dd.test_case().back()["type"] = type;
-//                dd.test_case().back()["from"] = from;
-//                dd.test_case().back()["accepting"] = true;
-//            }
-//        };
         for (const auto& accepting_state : automaton["accepting"]) {
             dd.test_case().emplace_back();
             dd.test_case().back()["type"] = type;
@@ -220,21 +207,6 @@ void initiate(std::istream& input_stream) {
             dd.test_case().back()["type"] = type;
             dd.test_case().back()["edge"] = edge;
         }
-//        auto automaton_states = automaton["states"];
-//        if (automaton_states.is_array()) {
-//            size_t from = 0;
-//            for (const auto& state : automaton_states) {
-//                json j_from = from;
-//                visit_state(state, j_from);
-//                ++from;
-//            }
-//        } else {
-//            assert(automaton_states.is_object());
-//            for (const auto& [from, state] : automaton_states.items()) {
-//                json j_from = from;
-//                visit_state(state, j_from);
-//            }
-//        }
     };
 
     visit_automaton(j_initial, 2);
@@ -245,12 +217,8 @@ void initiate(std::istream& input_stream) {
 
 json test_case_to_json(const std::vector<json>& test_case, const json& meta) {
     json j_instance = json::object();
-    j_instance["instance"] = json::array();
-    j_instance["instance"].emplace_back(meta);
+    j_instance["instance"] = {meta,json(),json(),json()};
     bool state_names = meta["state-names"].get<bool>();
-    j_instance["instance"].emplace_back();
-    j_instance["instance"].emplace_back();
-    j_instance["instance"].emplace_back();
     json& j_pda = j_instance["instance"][1];
     json& j_initial = j_instance["instance"][2];
     json& j_final = j_instance["instance"][3];
@@ -304,45 +272,18 @@ json test_case_to_json(const std::vector<json>& test_case, const json& meta) {
             state = json::object();
         }
     }
-    if (state_names) {
-        for (const auto& [state_name, _] : j_pda["states"].items()) {
-            j_initial["states"][state_name]["initial"] = true;
-            j_final["states"][state_name]["initial"] = true;
-        }
-        for (auto& [_, state] : j_initial["states"].items()) {
-            if (!state.contains("edges")) state["edges"] = json::array();
-        }
-        for (auto& [_, state] : j_final["states"].items()) {
-            if (!state.contains("edges")) state["edges"] = json::array();
-        }
-    } else {
-        size_t num_pda_states = j_pda["states"].size();
-        size_t i = 0;
-        for (json& state : j_initial["states"]) {
-            if (!state.contains("edges")) state["edges"] = json::array();
-            if (i < num_pda_states) state["initial"] = true;
-            i++;
-        }
-        i=0;
-        for (json& state : j_final["states"]) {
-            if (!state.contains("edges")) state["edges"] = json::array();
-            if (i < num_pda_states) state["initial"] = true;
-            i++;
-        }
-    }
     return j_instance;
 }
 
-//void write_json_file(const json& j, const std::string& file_name, const fs::path& output_dir_path) {
-//    auto file_path = output_dir_path / file_name;
-//    std::ofstream stream(file_path);
-//    if (!stream.is_open()) {
-//        std::stringstream es;
-//        es << "error: Could not open file: " << file_path << std::endl;
-//        throw std::runtime_error(es.str());
-//    }
-//    stream << j.dump() << std::endl;
-//}
+void write_json_file(const json& j, const std::string& file_name) {
+    std::ofstream stream(file_name);
+    if (!stream.is_open()) {
+        std::stringstream es;
+        es << "error: Could not open file: " << file_name << std::endl;
+        throw std::runtime_error(es.str());
+    }
+    stream << j.dump() << std::endl;
+}
 
 
 int main(int argc, const char** argv) {
@@ -350,25 +291,18 @@ int main(int argc, const char** argv) {
     opts.add_options()
             ("help,h", "produce help message");
 
-//    size_t pds_id = 0;
-//    size_t initial_id = 0;
-//    size_t final_id = 0;
-//    std::string input_dir, output_dir;
     std::string file_name;
     bool init = false;
     bool step = false;
+    bool simplify = false;
 //    bool steps = false;
     bool last_test_failed = false;
 //    json fail_ids_input;
     opts.add_options()
             ("file,f", po::value<std::string>(&file_name), "File name of (input or output) pushdown json instance.")
-//            ("pds,p", po::value<size_t>(&pds_id), "Index of pushdown")
-//            ("initial,i", po::value<size_t>(&initial_id), "Index of initial P-automaton")
-//            ("final,f", po::value<size_t>(&final_id), "Index of final P-automaton")
-//            ("dir,d", po::value<std::string>(&input_dir), "Input directory to read files from.")
-//            ("out-dir,o", po::value<std::string>(&output_dir), "Output directory to write files to.")
             ("init", po::bool_switch(&init), "Initiate delta-debugging.")
             ("step", po::bool_switch(&step), "Next step of delta-debugging.")
+            ("simplify", po::bool_switch(&simplify), "Simplify states and labels.")
 //            ("steps", po::bool_switch(&step), "Perform multiple step of delta-debugging in one go.")
             ("fail", po::bool_switch(&last_test_failed), "The last test case failed.")
 //            ("fail-ids", po::value<json>(&fail_ids_input), "IDs of failing test cases in last iteration.")
@@ -403,19 +337,106 @@ int main(int argc, const char** argv) {
         auto test_case = done ? dd.test_case() : next_test_case.value(); // If done, we output the minimal test case.
 
         auto j_instance = test_case_to_json(test_case, dd.meta());
+        write_json_file(j_instance, file_name);
 
-        std::ofstream stream(file_name);
-        if (!stream.is_open()) {
-            std::stringstream es;
-            es << "error: Could not open file: " << file_name << std::endl;
-            throw std::runtime_error(es.str());
-        }
-        stream << j_instance.dump() << std::endl;
-
-        if (!done) { // Indicate in return value whether to continue. (I did not manage to use this from bash, we check for existence of file instead.)
+        if (done) { // Indicate in return value whether to continue. (I did not manage to use this from bash, we check for existence of file instead.)
             return 1;
         }
         return 0;
+    }
+
+    if (simplify) {
+        DeltaDebug dd;
+        dd.from_json();
+        if (!dd.meta()["state-names"]) { // NOTE: Only works for state_names==false
+
+            // First find all states, since we want to preserve order.
+            auto states = std::unordered_set<size_t>();
+            for (auto& feature : dd.test_case()) {
+                size_t type = feature["type"].get<size_t>();
+                switch (type) {
+                    case 1: {
+                        states.emplace(feature["from"].get<size_t>());
+                        states.emplace(feature["rule"]["to"].get<size_t>());
+                        break;
+                    }
+                    case 2:
+                    case 3: {
+                        if (feature.contains("accepting")) {
+                            states.emplace(feature["accepting"].get<size_t>());
+                        }
+                        if (feature.contains("edge")) {
+                            states.emplace(feature["edge"][0].get<size_t>());
+                            states.emplace(feature["edge"][2].get<size_t>());
+                        }
+                        break;
+                    }
+                    default:
+                        std::cerr << "Error: Unknown feature type: " << type;
+                        exit(-1);
+                }
+            }
+            std::vector<size_t> states_v(states.begin(), states.end());
+            std::sort(states_v.begin(), states_v.end());
+            auto state_map = std::unordered_map<size_t,size_t>();
+            size_t i = 0;
+            for (auto state : states_v) {
+                state_map.emplace(state, i);
+                ++i;
+            }
+            auto map_state = [&state_map](size_t state) -> size_t {
+                auto it = state_map.find(state);
+                assert(it != state_map.end());
+                return it->second;
+            };
+            auto label_map = std::unordered_map<std::string,std::string>();
+            std::string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            size_t index = 0;
+            auto map_label = [&label_map,&alphabet,&index](const std::string& label) -> std::string {
+                if (label == "*") { // Don't touch the wildcard
+                    return label;
+                }
+                auto it = label_map.find(label);
+                if (it != label_map.end()) {
+                    return it->second;
+                }
+                return label_map.emplace(label, index < alphabet.size() ? std::string(1,alphabet[index++]) : label).first->second;
+            };
+            for (auto& feature : dd.test_case()) {
+                size_t type = feature["type"].get<size_t>();
+                switch (type) {
+                    case 1: {
+                        feature["from"] = map_state(feature["from"].get<size_t>());
+                        feature["pre"] = map_label(feature["pre"].get<std::string>());
+                        if (feature["rule"].contains("swap")) {
+                            feature["rule"]["swap"] = map_label(feature["rule"]["swap"].get<std::string>());
+                        }
+                        if (feature["rule"].contains("push")) {
+                            feature["rule"]["push"] = map_label(feature["rule"]["push"].get<std::string>());
+                        }
+                        feature["rule"]["to"] = map_state(feature["rule"]["to"].get<size_t>());
+                        break;
+                    }
+                    case 2:
+                    case 3: {
+                        if (feature.contains("accepting")) {
+                            feature["accepting"] = map_state(feature["accepting"].get<size_t>());
+                        }
+                        if (feature.contains("edge")) {
+                            feature["edge"][0] = map_state(feature["edge"][0].get<size_t>());
+                            feature["edge"][1] = map_label(feature["edge"][1].get<std::string>());
+                            feature["edge"][2] = map_state(feature["edge"][2].get<size_t>());
+                        }
+                        break;
+                    }
+                    default:
+                        std::cerr << "Error: Unknown feature type: " << type;
+                        exit(-1);
+                }
+            }
+        }
+        dd.to_json();
+        write_json_file(test_case_to_json(dd.test_case(), dd.meta()), file_name);
     }
 
 //    if (steps) {

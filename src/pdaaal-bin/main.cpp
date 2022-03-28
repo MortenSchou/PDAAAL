@@ -116,6 +116,27 @@ int main(int argc, const char** argv) {
         return 1;
     }
 
+    if (verifier.compare_enabled()) {
+        bool pdaaal_result, wpds_result;
+        json pdaaal_weight, wpds_weight;
+
+        auto instance_variant1 = parsing.parse_instance<TraceInfoType::Single>();
+        std::tie(pdaaal_result, pdaaal_weight) = std::visit([&verifier](auto&& instance) {
+            return verifier.compare_part1(*instance);
+        }, instance_variant1);
+
+        auto instance_variant2 = parsing.parse_instance<TraceInfoType::Single>();
+        std::tie(wpds_result, wpds_weight) = std::visit([&verifier](auto&& instance) {
+            return verifier.compare_part2(*instance);
+        }, instance_variant2);
+
+        if (pdaaal_result != wpds_result) return 1;
+        if (pdaaal_result) {
+            if (pdaaal_weight != wpds_weight) return 1;
+        }
+        return 0;
+    }
+
     if (verifier.use_wpds()) {
         auto instance_variant = parsing.parse_instance<TraceInfoType::Single>();
         json_stream json_out;
