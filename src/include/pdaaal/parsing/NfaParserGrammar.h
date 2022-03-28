@@ -27,7 +27,7 @@
 #ifndef PDAAAL_NFAPARSERGRAMMAR_H
 #define PDAAAL_NFAPARSERGRAMMAR_H
 
-#include <pdaaal/NFA.h>
+#include "pdaaal/NFA.h"
 #include <tao/pegtl.hpp>
 
 namespace pegtl = tao::pegtl;
@@ -80,10 +80,10 @@ namespace pdaaal {
         // Make NfaBuilder work with the pegtl::state rule
         // Get label function from first 'upper' state object.
         template<typename ParseInput, typename State, typename... States>
-        explicit NfaBuilder(const ParseInput&, State&& st1, States&&... st)
+        explicit NfaBuilder(const ParseInput&, State&& st1, States&&...)
         : _label_function(st1.get_label_map()) { }
         template<typename ParseInput, typename State, typename... States>
-        void success(const ParseInput&, State&& st1, States&&... st) {
+        void success(const ParseInput&, State&& st1, States&&...) {
             st1.accept_nfa(get_nfa()); // Move NFA to the first 'upper' state object.
         }
 

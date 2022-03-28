@@ -27,12 +27,11 @@
 #ifndef PDAAAL_PTRIE_INTERFACE_H
 #define PDAAAL_PTRIE_INTERFACE_H
 
+#include "std20.h"
 #include <ptrie/ptrie_map.h>
+#include <boost/mp11.hpp>
 #include <vector>
 #include <variant>
-#include <pdaaal/utils/std20.h>
-
-#include <boost/mp11.hpp>
 
 namespace pdaaal::utils {
     // This file defines interfacing functionality for using more types with ptrie.
@@ -135,7 +134,7 @@ namespace pdaaal::utils {
     template <typename KEY>
     struct byte_vector_converter<KEY, std::enable_if_t<has_byte_iterator_v<KEY>>> {
         using T = KEY;
-        static constexpr size_t size(const T& data) {
+        static constexpr size_t size(const T&) {
             return ptrie::byte_iterator<KEY>::element_size();
         }
         static constexpr void push_back_bytes(std::vector<std::byte>& result, const T& data){

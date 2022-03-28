@@ -27,13 +27,15 @@
 #ifndef PDAAAL_PAUTOMATONPRODUCT_H
 #define PDAAAL_PAUTOMATONPRODUCT_H
 
-#include <pdaaal/PAutomatonAlgorithms.h>
+#include "PDA.h"
+#include "PAutomaton.h"
+#include "pdaaal/internal/PAutomatonAlgorithms.h"
 
 namespace pdaaal {
 
-    template <typename pda_t, typename automaton_t, typename W>
+    template <typename pda_t, typename automaton_t, typename W, TraceInfoType trace_info_type = TraceInfoType::Single>
     class PAutomatonProduct {
-        using product_automaton_t = PAutomaton<W>; // No explicit abstraction on product automaton - this is covered by _initial and _final.
+        using product_automaton_t = internal::PAutomaton<W,trace_info_type>; // No explicit abstraction on product automaton - this is covered by _initial and _final.
         using state_t = typename product_automaton_t::state_t;
         static constexpr auto epsilon = product_automaton_t::epsilon;
     public:
@@ -49,6 +51,11 @@ namespace pdaaal {
           _initial(std::move(initial), _pda), _final(std::move(final), _pda),
           _product(_pda, get_initial_accepting(_initial, _final), true) {};
 
+        PAutomatonProduct(PAutomatonProduct&& other, const pda_t& pda) noexcept // Move constructor, but update reference to PDA.
+        : _pda(pda), _pda_size(_pda.states().size()), _initial(std::move(other._initial), _pda), _final(std::move(other._final), _pda),
+          _product(std::move(other._product), _pda), _swap_initial_final(other._swap_initial_final), _id_map(std::move(other._id_map)),
+          _id_fast_lookup(std::move(other._id_fast_lookup)), _id_fast_lookup_back(std::move(other._id_fast_lookup_back)) {};
+
         // Returns whether an accepting state in the product automaton was reached.
         template<bool needs_back_lookup = false, bool ET = true>
         bool initialize_product() {
@@ -60,17 +67,17 @@ namespace pdaaal {
         }
 
         // Returns whether an accepting state in the product automaton was reached.
-        bool add_edge_product(size_t from, uint32_t label, size_t to, trace_ptr<W> trace) {
+        bool add_edge_product(size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W> trace) {
             return add_edge(from, label, to, trace,
                             _swap_initial_final ? _final : _initial,
                             _swap_initial_final ? _initial : _final);
         }
 
         // This is for the dual_search mode:
-        bool add_initial_edge(size_t from, uint32_t label, size_t to, trace_ptr<W> trace) {
+        bool add_initial_edge(size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W> trace) {
             return add_edge<true, true>(from, label, to, trace, _initial, _final);
         }
-        bool add_final_edge(size_t from, uint32_t label, size_t to, trace_ptr<W> trace) {
+        bool add_final_edge(size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W> trace) {
             return add_edge<false, true>(from, label, to, trace, _initial, _final);
         }
 
@@ -105,155 +112,59 @@ namespace pdaaal {
             _swap_initial_final = true;
         }
 
-        template<bool abstraction>
-        using path_state = std::conditional_t<abstraction, std::pair<size_t,size_t>, size_t>;
+        template<bool state_pair>
+        using path_state = std::conditional_t<state_pair, std::pair<size_t,size_t>, size_t>;
 
-        template<Trace_Type trace_type = Trace_Type::Any, bool abstraction = false>
+        template<Trace_Type trace_type>
+        [[nodiscard]] auto find_path_fixed_point() const {
+            assert(W::is_weight);
+            std::tuple<AutomatonPath<>, typename W::type> t; // Ensure copy elision.
+            auto& [path, weight] = t;
+
+            internal::PAutomatonFixedPoint<W,trace_type> fixed_point(_product);
+            fixed_point.run();
+            if (fixed_point.not_accepting()) {
+                path = AutomatonPath();
+                weight = internal::solver_weight<W,trace_type>::max();
+            } else if (fixed_point.is_infinite()) {
+                path = fixed_point.get_path_with_loop([this](size_t state) -> size_t { return get_original_ids(state).first; });
+                weight = internal::solver_weight<W,trace_type>::bottom();
+            } else {
+                path = fixed_point.get_path([this](size_t state) -> size_t { return get_original_ids(state).first; });
+                weight = fixed_point.get_weight();
+            }
+            return t;
+        }
+
+        template <bool state_pair = false>
+        std::tuple<AutomatonPath<state_pair>, typename W::type> find_path_shortest() const {
+            return _product.find_path_shortest([this](size_t s){ return get_original<state_pair>(s); });
+        }
+
+        template<Trace_Type trace_type = Trace_Type::Any, bool state_pair = false>
         [[nodiscard]] typename std::conditional_t<
             (trace_type == Trace_Type::Shortest || trace_type == Trace_Type::Longest || trace_type == Trace_Type::ShortestFixedPoint) && is_weighted<W>,
-        std::tuple<std::vector<path_state<abstraction>>, std::vector<uint32_t>, typename W::type>,
-        std::tuple<std::vector<path_state<abstraction>>, std::vector<uint32_t>>>
+        std::tuple<AutomatonPath<state_pair>, typename W::type>,
+        AutomatonPath<state_pair>>
         find_path() const {
             if constexpr ((trace_type == Trace_Type::Longest || trace_type == Trace_Type::ShortestFixedPoint) && W::is_weight) {
-                PAutomatonFixedPoint<W,true,trace_type> fixed_point(_product);
-                fixed_point.run();
-                if (fixed_point.not_accepting()) {
-                    return {std::vector<size_t>(), std::vector<uint32_t>(), solver_weight<W,trace_type>::max()};
-                }
-                if (fixed_point.is_infinite()) {
-                    return {std::vector<size_t>(), std::vector<uint32_t>(), solver_weight<W,trace_type>::bottom()}; // TODO: Can we provide more info than this??
-                }
-                return fixed_point.get_path([this](size_t state) -> size_t { return get_original_ids(state).first; });
+                return find_path_fixed_point<trace_type>();
             } else if constexpr (trace_type == Trace_Type::Shortest && is_weighted<W>) { // TODO: Consider unweighted shortest path.
-                // Dijkstra.
-                struct queue_elem {
-                    typename W::type weight;
-                    size_t state;
-                    uint32_t label;
-                    size_t stack_index;
-                    const queue_elem *back_pointer;
-                    queue_elem(typename W::type weight, size_t state, uint32_t label, size_t stack_index, const queue_elem *back_pointer = nullptr)
-                            : weight(weight), state(state), label(label), stack_index(stack_index), back_pointer(back_pointer) {};
-
-                    bool operator<(const queue_elem& other) const {
-                        return std::tie(state, label) < std::tie(other.state, other.label); // TODO: Is this correct? Should it not just be state?? and better then make 'visited' std::unordered_map<size_t, typename W::type>.
-                    }
-                    bool operator==(const queue_elem& other) const {
-                        return state == other.state && label == other.label;
-                    }
-                    bool operator!=(const queue_elem& other) const {
-                        return !(*this == other);
-                    }
-                };
-                struct queue_elem_comp {
-                    bool operator()(const queue_elem &lhs, const queue_elem &rhs){
-                        return solver_weight<W,trace_type>::less(rhs.weight, lhs.weight); // Used in a max-heap, so swap arguments to make it a min-heap.
-                    }
-                };
-                std::priority_queue<queue_elem, std::vector<queue_elem>, queue_elem_comp> search_queue;
-                std::vector<queue_elem> visited;
-                std::vector<std::unique_ptr<queue_elem>> pointers;
-                for (size_t i = 0; i < _pda_size; ++i) { // Iterate over _product._initial ([i]->_id)
-                    search_queue.emplace(W::zero(), i, std::numeric_limits<uint32_t>::max(), 0); // No label going into initial state.
-                }
-                while(!search_queue.empty()) {
-                    auto current = search_queue.top();
-                    search_queue.pop();
-
-                    if (_product.states()[current.state]->_accepting) {
-                        std::vector<path_state<abstraction>> path(current.stack_index + 1);
-                        std::vector<uint32_t> label_stack(current.stack_index);
-                        const queue_elem* p = &current;
-                        while (p->stack_index > 0) {
-                            path[p->stack_index] = get_original_ids(p->state).first;
-                            label_stack[p->stack_index - 1] = p->label;
-                            p = p->back_pointer;
-                        }
-                        if constexpr (abstraction) {
-                            path[p->stack_index] = get_original_ids(p->state).to_pair();
-                        } else {
-                            path[p->stack_index] = get_original_ids(p->state).first;
-                        }
-                        return std::make_tuple(path, label_stack, current.weight);
-                    }
-
-                    auto lb = std::lower_bound(visited.begin(), visited.end(), current);
-                    if (lb != std::end(visited) && *lb == current) {
-                        if (solver_weight<W,trace_type>::less(current.weight, lb->weight)) {
-                            *lb = current;
-                        } else {
-                            continue;
-                        }
-                    } else {
-                        lb = visited.insert(lb, current); // TODO: Consider using std::unordered_map instead...
-                    }
-                    auto u_pointer = std::make_unique<queue_elem>(*lb);
-                    auto pointer = u_pointer.get();
-                    pointers.push_back(std::move(u_pointer));
-                    for (const auto& [to,labels] : _product.states()[current.state]->_edges) {
-                        if (!labels.empty()) {
-                            auto label = std::min_element(labels.begin(), labels.end(), [](const auto& a, const auto& b){ return solver_weight<W,trace_type>::less(a.second.second, b.second.second); });
-                            search_queue.emplace(solver_weight<W,trace_type>::add(current.weight, label->second.second), to, label->first, current.stack_index + 1, pointer);
-                        }
-                    }
-                }
-                return std::make_tuple(std::vector<path_state<abstraction>>(), std::vector<uint32_t>(), solver_weight<W,trace_type>::max());
+                return find_path_shortest<state_pair>();
             } else {
-                // DFS search.
-                std::vector<path_state<abstraction>> path;
-                std::vector<uint32_t> label_stack;
-
-                std::vector<std::tuple<size_t,size_t,uint32_t>> waiting; // state_id, stack_index, last_label (if stack_index > 0)
-                waiting.reserve(_pda_size);
-                for (size_t i = 0; i < _pda_size; ++i) {
-                    if (_product.states()[i]->_accepting) { // Initial accepting state
-                        if constexpr (abstraction) {
-                            path.emplace_back(i,i);
-                        } else {
-                            path.push_back(i);
-                        }
-                        return std::make_tuple(path, label_stack);
-                    }
-                    waiting.emplace_back(i, 0, std::numeric_limits<uint32_t>::max()); // Add all initial states in _product.
-                }
-                std::unordered_set<size_t> seen;
-
-                while (!waiting.empty()) {
-                    auto [current, stack_index, last_label] = waiting.back();
-                    waiting.pop_back();
-                    path.resize(stack_index + 2);
-                    label_stack.resize(stack_index + 1);
-                    if constexpr (abstraction) {
-                        path[stack_index] = get_original_ids(current).to_pair();
-                    } else {
-                        path[stack_index] = get_original_ids(current).first;
-                    }
-                    if (stack_index > 0) {
-                        label_stack[stack_index - 1] = last_label;
-                    }
-                    for (const auto &[to,labels] : _product.states()[current]->_edges) {
-                        if (!labels.empty() && seen.emplace(to).second) {
-                            uint32_t label = labels[0].first;
-                            if (_product.states()[to]->_accepting) {
-                                if constexpr (abstraction) {
-                                    path[stack_index + 1] = get_original_ids(to).to_pair();
-                                } else {
-                                    path[stack_index + 1] = get_original_ids(to).first;
-                                }
-                                label_stack[stack_index] = label;
-                                return std::make_tuple(path, label_stack);
-                            }
-                            waiting.emplace_back(to, stack_index + 1, label);
-                        }
-                    }
-                }
-                return std::make_tuple(std::vector<path_state<abstraction>>(), std::vector<uint32_t>());
+                return _product.find_path([this](size_t s){ return get_original<state_pair>(s); });
             }
+        }
+
+        [[nodiscard]] nlohmann::json to_json() const {
+            nlohmann::json j;
+            j["instance"] = *this;
+            return j;
         }
 
     private:
         template<bool edge_in_first = true, bool needs_back_lookup = false>
-        bool add_edge(size_t from, uint32_t label, size_t to, trace_ptr<W> trace,
+        bool add_edge(size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W> trace,
                       const automaton_t& first, const automaton_t& second) { // States in first and second automaton corresponds to respectively first and second component of the states in product automaton.
             static_assert(edge_in_first || needs_back_lookup, "If you insert edge in the second automaton, then you must also enable using _id_fast_lookup_back to keep the relevant information.");
             const auto& fast_lookup = constexpr_ternary<edge_in_first>(_id_fast_lookup, _id_fast_lookup_back);
@@ -382,6 +293,15 @@ namespace pdaaal {
             _id_map.unpack(id - _pda_size, &res);
             return res;
         }
+        template <bool state_pair>
+        auto get_original(size_t id) const {
+            if constexpr (state_pair) {
+                return get_original_ids(id).to_pair();
+            } else {
+                return get_original_ids(id).first;
+            }
+        }
+
         template<bool needs_back_lookup = false>
         std::pair<bool,size_t> get_product_state(std::pair<const state_t*, const state_t*> pair) {
             return get_product_state<needs_back_lookup>(pair.first, pair.second);
@@ -455,15 +375,33 @@ namespace pdaaal {
         std::vector<std::vector<std::pair<size_t,size_t>>> _id_fast_lookup_back; // maps final_state -> (initial_state, product_state)  Only used in dual_search
     };
 
-    template<typename label_t, typename W, typename state_t, bool skip_state_mapping>
-    PAutomatonProduct(const TypedPDA<label_t,W,fut::type::vector,state_t,skip_state_mapping>& pda,
+    template<typename label_t, typename W, typename state_t, bool skip_state_mapping, TraceInfoType trace_info_type = TraceInfoType::Single>
+    PAutomatonProduct(const PDA<label_t,W,fut::type::vector,state_t,skip_state_mapping>& pda,
                       const NFA<label_t>& initial_nfa, const std::vector<size_t>& initial_states,
                       const NFA<label_t>& final_nfa, const std::vector<size_t>& final_states)
-      -> PAutomatonProduct<TypedPDA<label_t,W,fut::type::vector,state_t,skip_state_mapping>,PAutomaton<W,true>,W>;
+      -> PAutomatonProduct<PDA<label_t,W,fut::type::vector,state_t,skip_state_mapping>,PAutomaton<label_t,W,state_t,skip_state_mapping,trace_info_type>,W>;
 
-    template<typename label_t, typename W, typename state_t, bool skip_state_mapping, bool indirect>
-    PAutomatonProduct(const TypedPDA<label_t,W,fut::type::vector,state_t,skip_state_mapping>& pda,
-                      PAutomaton<W,indirect> initial, PAutomaton<W,indirect> final) -> PAutomatonProduct<TypedPDA<label_t,W,fut::type::vector,state_t,skip_state_mapping>,PAutomaton<W,indirect>,W>;
+    template<typename label_t, typename W, typename state_t, bool skip_state_mapping, TraceInfoType trace_info_type>
+    PAutomatonProduct(const PDA<label_t,W,fut::type::vector,state_t,skip_state_mapping>& pda,
+                      PAutomaton<label_t,W,state_t,skip_state_mapping,trace_info_type>&& initial,
+                      PAutomaton<label_t,W,state_t,skip_state_mapping,trace_info_type>&& final)
+      -> PAutomatonProduct<PDA<label_t,W,fut::type::vector,state_t,skip_state_mapping>,PAutomaton<label_t,W,state_t,skip_state_mapping,trace_info_type>,W,trace_info_type>;
+
+    template<typename label_t, typename W, typename state_t, bool skip_state_mapping, TraceInfoType trace_info_type>
+    PAutomatonProduct(const PDA<label_t,W,fut::type::vector,state_t,skip_state_mapping>& pda,
+                      internal::PAutomaton<W,trace_info_type> initial, internal::PAutomaton<W,trace_info_type> final)
+      -> PAutomatonProduct<PDA<label_t,W,fut::type::vector,state_t,skip_state_mapping>,internal::PAutomaton<W,trace_info_type>,W,trace_info_type>;
+
+    template<typename label_t, typename W, fut::type Container, typename state_t, bool skip_state_mapping, TraceInfoType trace_info_type>
+    void to_json(json& j, const PAutomatonProduct<PDA<label_t,W,Container,state_t,skip_state_mapping>,PAutomaton<label_t,W,state_t,skip_state_mapping,trace_info_type>, W, trace_info_type>& instance) {
+        j = json::array();
+        j.emplace_back(json::object());
+        details::params_state_names(j.back(), instance.pda());
+        details::params_weight_type(j.back(), instance.pda());
+        j.emplace_back(instance.pda());
+        j.emplace_back(); to_json_impl<false>(j.back(),instance.initial_automaton()); // Don't print initial states in P-automata,
+        j.emplace_back(); to_json_impl<false>(j.back(),instance.final_automaton());   // since they are derived from the PDA.
+    }
 
 }
 

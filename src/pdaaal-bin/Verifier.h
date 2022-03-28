@@ -27,8 +27,11 @@
 #ifndef PDAAAL_VERIFIER_H
 #define PDAAAL_VERIFIER_H
 
+#include "utils/json_stream.h"
+#include "parsing/PAutomatonParser.h"
+#include "parsing/PAutomatonJsonParser.h"
 #include <pdaaal/Solver.h>
-#include <parsing/PAutomatonParser.h>
+#include <wpds-pdaaal/WPDS_Verifier.h>
 
 namespace pdaaal {
 
@@ -73,174 +76,272 @@ namespace pdaaal {
 
     class Verifier {
     public:
-        explicit Verifier(const std::string& caption) : verification_options{caption} {
+        explicit Verifier(const std::string& caption) : verification_options(caption) {
             verification_options.add_options()
-                    ("engine,e", po::value<size_t>(&engine), "Engine. 0=no verification, 1=post*, 2=pre*, 3=dual*")
+                    ("engine,e", po::value<size_t>(&engine), "Engine. 0=no verification, 1=post*, 2=pre*, 3=dual*, 4=WPDS++post*, 5=WPDS++pre*")
                     ("trace,t", po::value<Trace_Type>(&trace_type)->default_value(Trace_Type::None), "Trace type. 0=no trace, 1=any trace, 2=shortest trace, 3=longest trace, 4=fixed-point shortest trace")
-                    ("initial-automaton,i", po::value<std::string>(&initial_pa_file), "Initial PAutomaton file input.")
-                    ("final-automaton,f", po::value<std::string>(&final_pa_file), "Final PAutomaton file input.")
-                    ("json-automata", po::bool_switch(&json_automata), "Parse Pautomata files using JSON format.")
                     ;
         }
         [[nodiscard]] const po::options_description& options() const { return verification_options; }
 
-        template <typename PDA_T>
-        void verify(PDA_T& pda) {
-            using pda_t = std20::remove_cvref_t<PDA_T>;
-            auto initial_p_automaton = json_automata ?
-                    PAutomatonJsonParser::parse(initial_pa_file, pda, "P-automaton") :
-                    PAutomatonParser::parse_file(initial_pa_file, pda);
-            auto final_p_automaton = json_automata ?
-                     PAutomatonJsonParser::parse(final_pa_file, pda, "P-automaton") :
-                     PAutomatonParser::parse_file(final_pa_file, pda);
-            PAutomatonProduct instance(pda, std::move(initial_p_automaton), std::move(final_p_automaton));
+        [[nodiscard]] bool needs_trace_info_pair() const {
+            return trace_type == Trace_Type::Longest || trace_type == Trace_Type::ShortestFixedPoint;
+        }
+        [[nodiscard]] bool use_wpds() const {
+            return engine == 4 || engine == 5;
+        }
+        [[nodiscard]] bool is_wpds_prestar() const {
+            return engine == 5;
+        }
+        template <typename instance_t>
+        void verify_wpds(instance_t& instance, json_stream& json_out) {
+            if (!use_wpds()) return;
 
-            bool result = false;
-            std::vector<typename pda_t::tracestate_t> trace;
-            switch (engine) {
-                case 1: {
-                    std::cout << "Using post*" << std::endl;
-                    switch (trace_type) {
-                        case Trace_Type::None:
-                            result = Solver::post_star_accepts<Trace_Type::None>(instance);
-                            break;
-                        case Trace_Type::Any:
-                            result = Solver::post_star_accepts<Trace_Type::Any>(instance);
-                            if (result) {
-                                trace = Solver::get_trace<Trace_Type::Any>(instance);
-                            }
-                            break;
-                        case Trace_Type::Shortest:
-                            if constexpr(pda_t::has_weight) {
-                                result = Solver::post_star_accepts<Trace_Type::Shortest>(instance);
-                                if (result) {
-                                    typename pda_t::weight_type weight;
-                                    std::tie(trace, weight) = Solver::get_trace<Trace_Type::Shortest>(instance);
-                                    std::cout << "Weight: " << weight << std::endl;
+            using pda_t = std20::remove_cvref_t<decltype(instance.pda())>;
+            using W = typename pda_t::weight;
+            if constexpr(W::is_signed) {
+                throw std::runtime_error("Signed weight is not supported for WPDS++ engine.");
+                return;
+            } else {
+                using WPDS_Weight = std::conditional_t<W::is_weight, std::conditional_t<W::is_vector, wpds_pdaaal::VectorUintWeight, wpds_pdaaal::UintWeight>, wpds_pdaaal::Reach>;
+                bool pre_star = is_wpds_prestar();
+                json_out.entry("engine", pre_star ? "WPDS-pre*" : "WPDS-post*");
+                stopwatch construction_time;
+                auto s = wpds::Semiring<WPDS_Weight>(WPDS_Weight::one());
+                using rule_t = wpds_pdaaal::WPDS_Rule<WPDS_Weight>;
+                wpds::WPDS<WPDS_Weight> pda(s, pre_star ? Query::prestar() : Query::poststar());
+                size_t from_state = 0;
+                for (const auto& state : instance.pda().states()) {
+                    auto from = rule_t::key_from_size_t(from_state);
+                    for (const auto& [rule, labels] : state._rules) {
+                        auto r = rule;
+                        auto to = rule_t::key_from_size_t(rule._to);
+                        auto apply = [&pda,&r,&from,&to](const auto& pre) {
+                            rule_t wpds_rule(from, pre, to);
+                            if constexpr (W::is_weight) {
+                                if constexpr (W::is_vector) {
+                                    wpds_rule._weight = new wpds_pdaaal::VectorUintWeight(r._weight);
+                                } else {
+                                    wpds_rule._weight = new wpds_pdaaal::UintWeight(r._weight);
                                 }
                             } else {
-                                assert(false);
-                                throw std::runtime_error("Cannot use shortest trace option for unweighted PDA.");
+                                wpds_rule._weight = wpds_pdaaal::Reach::one();
                             }
-                            break;
-                        case Trace_Type::Longest:
-                            assert(false);
-                            throw std::runtime_error("Cannot use fixed-point longest trace, not implemented for post* engine.");
-                            break;
-                        case Trace_Type::ShortestFixedPoint:
-                            assert(false);
-                            throw std::runtime_error("Cannot use fixed-point shortest trace, not implemented for post* engine.");
-                            break;
+                            switch (r._operation) {
+                                case PUSH:
+                                    wpds_rule._l1 = rule_t::key_from_size_t(r._op_label);
+                                    wpds_rule._l2 = pre;
+                                    break;
+                                case SWAP:
+                                    wpds_rule._l1 = rule_t::key_from_size_t(r._op_label);
+                                    break;
+                                case NOOP:
+                                    wpds_rule._l1 = wpds_rule._pre;
+                                    break;
+                                case POP:
+                                default:
+                                    break;
+                            }
+                            pda.add_rule(wpds_rule._from, wpds_rule._pre, wpds_rule._to, wpds_rule._l1, wpds_rule._l2, wpds_rule._weight);
+                        };
+                        if (labels.wildcard()) {
+                            for (size_t i = 0; i < instance.pda().number_of_labels(); ++i) {
+                                apply(rule_t::key_from_size_t(i));
+                            }
+                        } else {
+                            for (const auto& pre : labels.labels()) {
+                                apply(rule_t::key_from_size_t(pre));
+                            }
+                        }
                     }
-                    break;
+                    ++from_state;
                 }
-                case 2: {
-                    std::cout << "Using pre*" << std::endl;
-                    switch (trace_type) {
-                        case Trace_Type::None:
-                            result = Solver::pre_star_accepts(instance);
-                            break;
-                        case Trace_Type::Any:
-                            result = Solver::pre_star_accepts(instance);
-                            if (result) {
-                                trace = Solver::get_trace(instance);
-                            }
-                            break;
-                        case Trace_Type::Shortest:
-                            assert(false);
-                            throw std::runtime_error("Cannot use shortest trace, not implemented for pre* engine.");
-                            break;
-                        case Trace_Type::Longest:
-                            if constexpr(pda_t::has_weight) {
+                wpds_pdaaal::WPDS_SolverInstance<WPDS_Weight> problem_instance(pda, instance.initial_automaton(), instance.final_automaton(), instance.pda().states().size(), s);
+                construction_time.stop();
+                json_out.entry("construction_time", construction_time.duration());
+                stopwatch reachability_time;
+                bool result;
+                ref_ptr<WPDS_Weight> weight;
+                if (pre_star) {
+                    std::tie(result, weight) = problem_instance.pre_star();
+                } else {
+                    std::tie(result, weight) = problem_instance.post_star();
+                }
+                reachability_time.stop();
+                json_out.entry("rtime", reachability_time.duration());
+                if (result) {
+                    if constexpr (W::is_weight) {
+                        json_out.entry("weight", weight->to_json());
+                    }
+                }
+                json_out.entry("result", result);
+            }
+        }
+
+        template <TraceInfoType trace_info_type = TraceInfoType::Single, typename instance_t>
+        void verify(instance_t& instance, json_stream& json_out) {
+            using pda_t = std20::remove_cvref_t<decltype(instance.pda())>;
+
+            if (engine == 0) return; // No verification if not specified.
+            std::array<std::string,4> engines{"", "post*", "pre*", "dual*"};
+            if (engine < engines.size()) json_out.entry("engine", engines[engine]);
+            stopwatch reachability_time;
+            bool result = false;
+            std::vector<typename pda_t::tracestate_t> trace;
+            if constexpr (trace_info_type == TraceInfoType::Single) {
+                switch (engine) {
+                    case 1: {
+                        switch (trace_type) {
+                            case Trace_Type::None:
+                                result = Solver::post_star_accepts<Trace_Type::None>(instance);
+                                break;
+                            case Trace_Type::Any:
+                                result = Solver::post_star_accepts<Trace_Type::Any>(instance);
+                                if (result) {
+                                    trace = Solver::get_trace<Trace_Type::Any>(instance);
+                                }
+                                break;
+                            case Trace_Type::Shortest:
+                                if constexpr(pda_t::has_weight) {
+                                    result = Solver::post_star_accepts<Trace_Type::Shortest>(instance);
+                                    if (result) {
+                                        typename pda_t::weight_type weight;
+                                        using W = typename pda_t::weight;
+                                        std::tie(trace, weight) = Solver::get_trace<Trace_Type::Shortest>(instance);
+                                        reachability_time.stop(); // We don't want to include time for output in reachability_time.
+                                        json_out.entry("weight", weight);
+                                    }
+                                } else {
+                                    assert(false);
+                                    throw std::runtime_error("Cannot use shortest trace option for unweighted PDA.");
+                                }
+                                break;
+                            case Trace_Type::Longest:
+                            case Trace_Type::ShortestFixedPoint:
+                                assert(false);
+                                throw std::logic_error("Impossible control flow in switches");
+                                break;
+                        }
+                        break;
+                    }
+                    case 2: {
+                        switch (trace_type) {
+                            case Trace_Type::None:
+                                result = Solver::pre_star_accepts(instance);
+                                break;
+                            case Trace_Type::Any:
+                                result = Solver::pre_star_accepts(instance);
+                                if (result) {
+                                    trace = Solver::get_trace(instance);
+                                }
+                                break;
+                            case Trace_Type::Shortest:
+                                assert(false);
+                                throw std::runtime_error("Cannot use shortest trace, not implemented for pre* engine.");
+                                break;
+                            case Trace_Type::Longest:
+                            case Trace_Type::ShortestFixedPoint:
+                                assert(false);
+                                throw std::logic_error("Impossible control flow in switches");
+                                break;
+                        }
+                        break;
+                    }
+                    case 3: {
+                        switch (trace_type) {
+                            case Trace_Type::None:
+                                result = Solver::dual_search_accepts(instance);
+                                break;
+                            case Trace_Type::Any:
+                                result = Solver::dual_search_accepts(instance);
+                                if (result) {
+                                    trace = Solver::get_trace_dual_search(instance);
+                                }
+                                break;
+                            case Trace_Type::Shortest:
+                                assert(false);
+                                throw std::runtime_error("Cannot use shortest trace, not implemented for dual* engine.");
+                                break;
+                            case Trace_Type::Longest:
+                            case Trace_Type::ShortestFixedPoint:
+                                assert(false);
+                                throw std::logic_error("Impossible control flow in switches");
+                                break;
+                        }
+                        break;
+                    }
+                    default: {
+                        std::stringstream error;
+                        error << "error: Unsupported option value --engine " << engine << std::endl;
+                        throw std::runtime_error(error.str());
+                    }
+                }
+            } else {
+                switch (engine) {
+                    case 1:
+                    case 3: {
+                        assert(false);
+                        throw std::runtime_error("Cannot use fixed-point (longest or shortest) trace, not implemented for post* and dual* engine.");
+                    }
+                    case 2: {
+                        if constexpr(pda_t::has_weight) {
+                            if (trace_type == Trace_Type::Longest) {
                                 result = Solver::pre_star_fixed_point_accepts<Trace_Type::Longest>(instance);
                                 if (result) {
                                     typename pda_t::weight_type weight;
                                     std::tie(trace, weight) = Solver::get_trace<Trace_Type::Longest>(instance);
+                                    reachability_time.stop(); // We don't want to include time for output in reachability_time.
                                     using W = typename pda_t::weight;
-                                    if (weight == solver_weight<W,Trace_Type::Longest>::bottom()) {
-                                        std::cout << "Weight: infinity" << std::endl;
+                                    if (weight == internal::solver_weight<W,Trace_Type::Longest>::bottom()) {
+                                        json_out.entry("weight", "infinity");
                                     } else {
-                                        std::cout << "Weight: " << weight << std::endl;
+                                        json_out.entry("weight", weight);
                                     }
                                 }
-                            } else {
-                                assert(false);
-                                throw std::runtime_error("Cannot use longest (fixed point) trace option for unweighted PDA.");
-                            }
-                            break;
-                        case Trace_Type::ShortestFixedPoint:
-                            if constexpr(pda_t::has_weight) {
+                            } else { // (trace_type == Trace_Type::ShortestFixedPoint)
                                 result = Solver::pre_star_fixed_point_accepts<Trace_Type::ShortestFixedPoint>(instance);
                                 if (result) {
                                     typename pda_t::weight_type weight;
                                     std::tie(trace, weight) = Solver::get_trace<Trace_Type::ShortestFixedPoint>(instance);
+                                    reachability_time.stop(); // We don't want to include time for output in reachability_time.
                                     using W = typename pda_t::weight;
-                                    if (weight == solver_weight<W,Trace_Type::ShortestFixedPoint>::bottom()) {
-                                        std::cout << "Weight: negative infinity" << std::endl;
+                                    if (weight == internal::solver_weight<W,Trace_Type::ShortestFixedPoint>::bottom()) {
+                                        json_out.entry("weight", "negative infinity");
                                     } else {
-                                        std::cout << "Weight: " << weight << std::endl;
+                                        json_out.entry("weight", weight);
                                     }
                                 }
-                            } else {
-                                assert(false);
-                                throw std::runtime_error("Cannot use shortest (fixed point) trace option for unweighted PDA.");
                             }
-                            break;
+                        } else {
+                            assert(false);
+                            throw std::runtime_error("Cannot use fixed-point (longest or shortest) trace option for unweighted PDA.");
+                        }
+                        break;
                     }
-                    break;
-                }
-                case 3: {
-                    std::cout << "Using dual*" << std::endl;
-                    switch (trace_type) {
-                        case Trace_Type::None:
-                            result = Solver::dual_search_accepts(instance);
-                            break;
-                        case Trace_Type::Any:
-                            result = Solver::dual_search_accepts(instance);
-                            if (result) {
-                                trace = Solver::get_trace_dual_search(instance);
-                            }
-                            break;
-                        case Trace_Type::Shortest:
-                            assert(false);
-                            throw std::runtime_error("Cannot use shortest trace, not implemented for dual* engine.");
-                            break;
-                        case Trace_Type::Longest:
-                            assert(false);
-                            throw std::runtime_error("Cannot use longest trace, not implemented for dual* engine.");
-                            break;
-                        case Trace_Type::ShortestFixedPoint:
-                            assert(false);
-                            throw std::runtime_error("Cannot use shortest (fixed-point) trace, not implemented for dual* engine.");
-                            break;
+                    default: {
+                        std::stringstream error;
+                        error << "error: Unsupported option value --engine " << engine << std::endl;
+                        throw std::runtime_error(error.str());
                     }
-                    break;
                 }
             }
-            std::cout << ((result) ? "Reachable" : "Not reachable") << std::endl;
+            reachability_time.stop();
+            json_out.entry("rtime", reachability_time.duration());
+            json_out.entry("result", result);
+            json j_trace;
             for (const auto& trace_state : trace) {
-                std::cout << "< " << trace_state._pdastate << ", [";
-                bool first = true;
-                for (const auto& label : trace_state._stack) {
-                    if (first) {
-                        first = false;
-                    } else {
-                        std::cout << ", ";
-                    }
-                    std::cout << label;
-                }
-                std::cout << "] >" << std::endl;
+                json j_trace_state;
+                j_trace_state["state"] = trace_state._pdastate;
+                j_trace_state["stack"] = trace_state._stack;
+                j_trace.push_back(j_trace_state);
             }
-
+            json_out.entry("trace", j_trace);
         }
 
     private:
         po::options_description verification_options;
         size_t engine = 0;
         Trace_Type trace_type = Trace_Type::None;
-        std::string initial_pa_file, final_pa_file;
-        bool json_automata = false;
-        //bool print_trace = false;
     };
 }
 

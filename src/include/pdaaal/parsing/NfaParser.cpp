@@ -24,8 +24,10 @@
  * Created on 05-07-2021.
  */
 
-#include <pdaaal/parsing/NfaParser.h>
-#include <pdaaal/parsing/NfaParserGrammar.h>
+#include "NfaParser.h"
+#include "NfaParserGrammar.h"
+#include <iomanip>
+#include <filesystem>
 
 namespace pdaaal {
 

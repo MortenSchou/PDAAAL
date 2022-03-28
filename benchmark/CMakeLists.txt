@@ -1,4 +1,6 @@
 
+add_subdirectory(wpds)
+add_subdirectory(wpds-pdaaal)
 add_executable(generate)
 
 target_sources(generate PRIVATE Generate.cpp)

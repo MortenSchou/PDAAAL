@@ -25,10 +25,10 @@
  * Created on August 21, 2019, 2:47 PM
  */
 
-#include <pdaaal/Reducer.h>
+#include "Reducer.h"
 #include <cassert>
 
-namespace pdaaal {
+namespace pdaaal::internal {
 
     bool Reducer::tos_t::update_state(const std::pair<bool, bool>& new_state) {
         auto pre = _in_waiting;
@@ -113,7 +113,7 @@ namespace pdaaal {
         if (!dual_stack) {
             if (_tos.size() != all_labels) {
                 _tos.resize(all_labels);
-                for (size_t i = 0; i < all_labels; ++i) _tos[i] = i;
+                for (uint32_t i = 0; i < all_labels; ++i) _tos[i] = i;
                 changed = true;
             }
         }

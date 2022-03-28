@@ -27,10 +27,8 @@
 #ifndef PDAAAL_SOLVERINSTANCE_H
 #define PDAAAL_SOLVERINSTANCE_H
 
-#include <pdaaal/TypedPAutomaton.h>
-#include <pdaaal/AbstractionPDA.h>
-#include <pdaaal/AbstractionPAutomaton.h>
-#include <pdaaal/PAutomatonProduct.h>
+#include "PAutomaton.h"
+#include "PAutomatonProduct.h"
 #include <limits>
 
 namespace pdaaal {
@@ -38,12 +36,12 @@ namespace pdaaal {
     // Wrapper for PAutomatonProduct with an owning PDA member (as opposed to the reference in PAutomatonProduct).
     // SolverInstance is for normal PDA, AbstractionSolverInstance is for when using CEGAR.
 
-    template <typename T, typename W, typename state_t = size_t, bool skip_state_mapping = std::is_same_v<state_t,size_t>>
+    template <typename T, typename W, typename state_t = size_t, bool skip_state_mapping = std::is_same_v<state_t,size_t>, TraceInfoType trace_info_type = TraceInfoType::Single>
     class SolverInstance {
     public:
-        using pda_t = TypedPDA<T,W,fut::type::vector,state_t,skip_state_mapping>;
-        using pautomaton_t = TypedPAutomaton<T,W,state_t,skip_state_mapping>;
-        using product_t = PAutomatonProduct<pda_t, pautomaton_t, W>;
+        using pda_t = PDA<T,W,fut::type::vector,state_t,skip_state_mapping>;
+        using pautomaton_t = PAutomaton<T,W,state_t,skip_state_mapping, trace_info_type>;
+        using product_t = PAutomatonProduct<pda_t, pautomaton_t, W, trace_info_type>;
         SolverInstance(pda_t&& pda,
                        const NFA<T>& initial_nfa, const std::vector<size_t>& initial_states,
                        const NFA<T>& final_nfa,   const std::vector<size_t>& final_states)
@@ -52,63 +50,14 @@ namespace pdaaal {
         SolverInstance(pda_t&& pda, pautomaton_t&& initial, pautomaton_t&& final)
         : _pda(std::move(pda)), _product(_pda, std::move(initial), std::move(final)) {};
 
-        product_t* operator->() {
-            return &_product;
-        }
-        const product_t* operator->() const {
-            return &_product;
-        }
-        product_t& operator*() {
-            return _product;
-        }
-        const product_t& operator*() const {
-            return _product;
-        }
-        product_t& get() {
-            return _product;
-        }
-        const product_t& get() const {
-            return _product;
-        }
-
-    private:
-        pda_t _pda;
-        product_t _product;
-    };
-    template<typename label_t, typename W, typename state_t, bool skip_state_mapping>
-    SolverInstance(TypedPDA<label_t,W,fut::type::vector,state_t,skip_state_mapping>&& pda,
-                   const NFA<label_t>& initial_nfa, const std::vector<size_t>& initial_states,
-                   const NFA<label_t>& final_nfa,   const std::vector<size_t>& final_states) -> SolverInstance<label_t,W,state_t,skip_state_mapping>;
-    template<typename label_t, typename W, typename state_t, bool skip_state_mapping>
-    SolverInstance(TypedPDA<label_t,W,fut::type::vector,state_t,skip_state_mapping>&& pda,
-                   TypedPAutomaton<label_t,W,state_t,skip_state_mapping> initial,
-                   TypedPAutomaton<label_t,W,state_t,skip_state_mapping> final) -> SolverInstance<label_t,W,state_t,skip_state_mapping>;
-
-    template <typename T, typename W>
-    class AbstractionSolverInstance {
-    public:
-        using pda_t = AbstractionPDA<T,W>;
-        using pautomaton_t = AbstractionPAutomaton<T,W>;
-        using product_t = PAutomatonProduct<pda_t, pautomaton_t, W>;
-        AbstractionSolverInstance(pda_t&& pda,
-                                  const NFA<T>& initial_nfa, const std::vector<size_t>& initial_states,
-                                  const NFA<T>& final_nfa,   const std::vector<size_t>& final_states)
-        : _pda(std::move(pda)), _product(_pda, initial_nfa, initial_states, final_nfa, final_states) {};
-
-        auto move_pda_refinement_mapping() {
-            return _pda.move_label_map();
-        }
-        auto move_pda_refinement_mapping(const Refinement<T>& refinement) {
-            auto map = _pda.move_label_map();
-            map.refine(refinement);
-            return map;
-        }
-        auto move_pda_refinement_mapping(const HeaderRefinement<T>& header_refinement) {
-            auto map = _pda.move_label_map();
-            for (const auto& refinement : header_refinement.refinements()) {
-                map.refine(refinement);
+        SolverInstance(SolverInstance&& other) noexcept
+        : _pda(std::move(other._pda)), _product(std::move(other._product), _pda) {};
+        SolverInstance& operator=(SolverInstance&& other) noexcept {
+            if (this != &other) {
+                _pda = std::move(other._pda);
+                _product = product_t(std::move(other._product), _pda);
             }
-            return map;
+            return *this;
         }
 
         product_t* operator->() {
@@ -134,6 +83,14 @@ namespace pdaaal {
         pda_t _pda;
         product_t _product;
     };
+    template<typename label_t, typename W, typename state_t, bool skip_state_mapping, TraceInfoType trace_info_type = TraceInfoType::Single>
+    SolverInstance(PDA<label_t,W,fut::type::vector,state_t,skip_state_mapping>&& pda,
+                   const NFA<label_t>& initial_nfa, const std::vector<size_t>& initial_states,
+                   const NFA<label_t>& final_nfa, const std::vector<size_t>& final_states) -> SolverInstance<label_t,W,state_t,skip_state_mapping,trace_info_type>;
+    template<typename label_t, typename W, typename state_t, bool skip_state_mapping, TraceInfoType trace_info_type>
+    SolverInstance(PDA<label_t,W,fut::type::vector,state_t,skip_state_mapping>&& pda,
+                   PAutomaton<label_t,W,state_t,skip_state_mapping,trace_info_type> initial,
+                   PAutomaton<label_t,W,state_t,skip_state_mapping,trace_info_type> final) -> SolverInstance<label_t,W,state_t,skip_state_mapping,trace_info_type>;
 
 }
 
