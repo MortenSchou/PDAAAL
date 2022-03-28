@@ -76,6 +76,20 @@ public:
         return next_output;
     }
 
+    std::vector<std::vector<json>> steps(const std::vector<size_t>& failed_ids = std::vector<size_t>()) {
+        std::vector<std::vector<json>> result;
+
+        while (_i < _n) {
+            auto next = step();
+            if (next.has_value()) {
+                result.emplace_back(next.value());
+            }
+        }
+
+        return result;
+
+    }
+
     void from_json(std::istream& s = std::cin) {
         json j;
         s >> j;
@@ -208,6 +222,103 @@ void initiate(std::istream& pda_stream, std::istream& initial_stream, std::istre
     dd.to_json();
 }
 
+std::tuple<json,json,json> test_case_to_json(const std::vector<json>& test_case) {
+    json j_pda; j_pda["pda"]["states"] = json();
+    json j_initial; j_initial["P-automaton"]["states"] = json();
+    json j_final; j_final["P-automaton"]["states"] = json();
+    bool state_names = false;
+    for (const auto& feature : test_case) {
+        size_t type = feature["type"].get<size_t>();
+        if (!feature["from"].is_number_unsigned()) state_names = true;
+        switch (type) {
+            case 1: {
+                // PDA
+                json& state = (feature["from"].is_number_unsigned()) ? j_pda["pda"]["states"][feature["from"].get<size_t>()] : j_pda["pda"]["states"][feature["from"].get<std::string>()];
+                auto label = feature["pre"].get<std::string>();
+                if (state.contains(label)) {
+                    if (!state[label].is_array()) {
+                        auto temp_rule = state[label];
+                        state[label] = json::array();
+                        state[label].emplace_back(temp_rule);
+                    }
+                    state[label].emplace_back(feature["rule"]);
+                } else {
+                    state[label] = feature["rule"];
+                }
+                json& to_state = (feature["rule"]["to"].is_number_unsigned()) ? j_pda["pda"]["states"][feature["rule"]["to"].get<size_t>()] : j_pda["pda"]["states"][feature["rule"]["to"].get<std::string>()];
+                if (to_state.is_null()) {
+                    to_state = json::object();
+                }
+                break;
+            }
+            case 2:
+            case 3: {
+                json& j_automaton = type == 2 ? j_initial : j_final;
+                json& state = (feature["from"].is_number_unsigned()) ? j_automaton["P-automaton"]["states"][feature["from"].get<size_t>()] : j_automaton["P-automaton"]["states"][feature["from"].get<std::string>()];
+                if (feature.contains("accepting")) {
+                    assert(feature["accepting"].get<bool>());
+                    state["accepting"] = true;
+                }
+                if (feature.contains("edge")) {
+                    state["edges"].emplace_back(feature["edge"]);
+                }
+                break;
+            }
+            default:
+                std::cerr << "Error: Unknown feature type: " << type;
+                exit(-1);
+        }
+    }
+
+    if (j_pda["pda"]["states"].empty()) j_pda["pda"]["states"] = state_names ? json::object() : json::array();
+    if (j_initial["P-automaton"]["states"].empty()) j_initial["P-automaton"]["states"] = state_names ? json::object() : json::array();
+    if (j_final["P-automaton"]["states"].empty()) j_final["P-automaton"]["states"] = state_names ? json::object() : json::array();
+
+    for (json& state : j_pda["pda"]["states"]) {
+        if (state.is_null()) {
+            state = json::object();
+        }
+    }
+    if (state_names) {
+        for (const auto& [state_name, _] : j_pda["pda"]["states"].items()) {
+            j_initial["P-automaton"]["states"][state_name]["initial"] = true;
+            j_final["P-automaton"]["states"][state_name]["initial"] = true;
+        }
+        for (auto& [_, state] : j_initial["P-automaton"]["states"].items()) {
+            if (!state.contains("edges")) state["edges"] = json::array();
+        }
+        for (auto& [_, state] : j_final["P-automaton"]["states"].items()) {
+            if (!state.contains("edges")) state["edges"] = json::array();
+        }
+    } else {
+        size_t num_pda_states = j_pda["pda"]["states"].size();
+        size_t i = 0;
+        for (json& state : j_initial["P-automaton"]["states"]) {
+            if (!state.contains("edges")) state["edges"] = json::array();
+            if (i < num_pda_states) state["initial"] = true;
+            i++;
+        }
+        i=0;
+        for (json& state : j_final["P-automaton"]["states"]) {
+            if (!state.contains("edges")) state["edges"] = json::array();
+            if (i < num_pda_states) state["initial"] = true;
+            i++;
+        }
+    }
+    return std::make_tuple(j_pda, j_initial, j_final);
+}
+
+void write_json_file(const json& j, const std::string& file_name, const fs::path& output_dir_path) {
+    auto file_path = output_dir_path / file_name;
+    std::ofstream stream(file_path);
+    if (!stream.is_open()) {
+        std::stringstream es;
+        es << "error: Could not open file: " << file_path << std::endl;
+        throw std::runtime_error(es.str());
+    }
+    stream << j.dump() << std::endl;
+}
+
 
 int main(int argc, const char** argv) {
     po::options_description opts;
@@ -220,7 +331,9 @@ int main(int argc, const char** argv) {
     std::string input_dir, output_dir;
     bool init = false;
     bool step = false;
+    bool steps = false;
     bool last_test_failed = false;
+    json fail_ids_input;
     opts.add_options()
             ("pds,p", po::value<size_t>(&pds_id), "Index of pushdown")
             ("initial,i", po::value<size_t>(&initial_id), "Index of initial P-automaton")
@@ -229,7 +342,9 @@ int main(int argc, const char** argv) {
             ("out-dir,o", po::value<std::string>(&output_dir), "Output directory to write files to.")
             ("init", po::bool_switch(&init), "Initiate delta-debugging.")
             ("step", po::bool_switch(&step), "Next step of delta-debugging.")
+            ("steps", po::bool_switch(&step), "Perform multiple step of delta-debugging in one go.")
             ("fail", po::bool_switch(&last_test_failed), "The last test case failed.")
+            ("fail-ids", po::value<json>(&fail_ids_input), "IDs of failing test cases in last iteration.")
             ;
 
     po::variables_map vm;
@@ -309,119 +424,60 @@ int main(int argc, const char** argv) {
             initial_file_name << "initial" << initial_id << ".json";
             final_file_name << "final" << final_id << ".json";
         }
-        auto pda_file_path = output_dir_path / pda_file_name.str();
-        auto initial_file_path = output_dir_path / initial_file_name.str();
-        auto final_file_path = output_dir_path / final_file_name.str();
 
-        json j_pda; j_pda["pda"]["states"] = json();
-        json j_initial; j_initial["P-automaton"]["states"] = json();
-        json j_final; j_final["P-automaton"]["states"] = json();
-        bool state_names = false;
-        for (const auto& feature : test_case) {
-            size_t type = feature["type"].get<size_t>();
-            if (!feature["from"].is_number_unsigned()) state_names = true;
-            switch (type) {
-                case 1: {
-                    // PDA
-                    json& state = (feature["from"].is_number_unsigned()) ? j_pda["pda"]["states"][feature["from"].get<size_t>()] : j_pda["pda"]["states"][feature["from"].get<std::string>()];
-                    auto label = feature["pre"].get<std::string>();
-                    if (state.contains(label)) {
-                        if (!state[label].is_array()) {
-                            auto temp_rule = state[label];
-                            state[label] = json::array();
-                            state[label].emplace_back(temp_rule);
-                        }
-                        state[label].emplace_back(feature["rule"]);
-                    } else {
-                        state[label] = feature["rule"];
-                    }
-                    json& to_state = (feature["rule"]["to"].is_number_unsigned()) ? j_pda["pda"]["states"][feature["rule"]["to"].get<size_t>()] : j_pda["pda"]["states"][feature["rule"]["to"].get<std::string>()];
-                    if (to_state.is_null()) {
-                        to_state = json::object();
-                    }
-                    break;
-                }
-                case 2:
-                case 3: {
-                    json& j_automaton = type == 2 ? j_initial : j_final;
-                    json& state = (feature["from"].is_number_unsigned()) ? j_automaton["P-automaton"]["states"][feature["from"].get<size_t>()] : j_automaton["P-automaton"]["states"][feature["from"].get<std::string>()];
-                    if (feature.contains("accepting")) {
-                        assert(feature["accepting"].get<bool>());
-                        state["accepting"] = true;
-                    }
-                    if (feature.contains("edge")) {
-                        state["edges"].emplace_back(feature["edge"]);
-                    }
-                    break;
-                }
-                default:
-                    std::cerr << "Error: Unknown feature type: " << type;
-                    return -1;
-            }
-        }
+        auto [j_pda, j_initial, j_final] = test_case_to_json(test_case);
 
-        if (j_pda["pda"]["states"].empty()) j_pda["pda"]["states"] = state_names ? json::object() : json::array();
-        if (j_initial["P-automaton"]["states"].empty()) j_initial["P-automaton"]["states"] = state_names ? json::object() : json::array();
-        if (j_final["P-automaton"]["states"].empty()) j_final["P-automaton"]["states"] = state_names ? json::object() : json::array();
-
-        for (json& state : j_pda["pda"]["states"]) {
-            if (state.is_null()) {
-                state = json::object();
-            }
-        }
-        if (state_names) {
-            for (const auto& [state_name, _] : j_pda["pda"]["states"].items()) {
-                j_initial["P-automaton"]["states"][state_name]["initial"] = true;
-                j_final["P-automaton"]["states"][state_name]["initial"] = true;
-            }
-            for (auto& [_, state] : j_initial["P-automaton"]["states"].items()) {
-                if (!state.contains("edges")) state["edges"] = json::array();
-            }
-            for (auto& [_, state] : j_final["P-automaton"]["states"].items()) {
-                if (!state.contains("edges")) state["edges"] = json::array();
-            }
-        } else {
-            size_t num_pda_states = j_pda["pda"]["states"].size();
-            size_t i = 0;
-            for (json& state : j_initial["P-automaton"]["states"]) {
-                if (!state.contains("edges")) state["edges"] = json::array();
-                if (i < num_pda_states) state["initial"] = true;
-                i++;
-            }
-            i=0;
-            for (json& state : j_final["P-automaton"]["states"]) {
-                if (!state.contains("edges")) state["edges"] = json::array();
-                if (i < num_pda_states) state["initial"] = true;
-                i++;
-            }
-        }
-
-        std::ofstream pda_stream(pda_file_path);
-        if (!pda_stream.is_open()) {
-            std::stringstream es;
-            es << "error: Could not open pda-file: " << pda_file_path << std::endl;
-            throw std::runtime_error(es.str());
-        }
-        std::ofstream initial_stream(initial_file_path);
-        if (!initial_stream.is_open()) {
-            std::stringstream es;
-            es << "error: Could not open file: " << initial_file_path << std::endl;
-            throw std::runtime_error(es.str());
-        }
-        std::ofstream final_stream(final_file_path);
-        if (!final_stream.is_open()) {
-            std::stringstream es;
-            es << "error: Could not open file: " << final_file_path << std::endl;
-            throw std::runtime_error(es.str());
-        }
-        pda_stream << j_pda.dump() << std::endl;
-        initial_stream << j_initial.dump() << std::endl;
-        final_stream << j_final.dump() << std::endl;
+        write_json_file(j_pda, pda_file_name.str(), output_dir_path);
+        write_json_file(j_initial, initial_file_name.str(), output_dir_path);
+        write_json_file(j_final, final_file_name.str(), output_dir_path);
 
         if (!done) { // Indicate in return value whether to continue. (I did not manage to use this from bash, we check for existence of file instead.)
             return 1;
         }
         return 0;
+    }
+
+    if (steps) {
+        if (!fail_ids_input.is_array()) {
+            std::cerr << "Error in argument to --fail-ids:" << fail_ids_input.dump() << ". Must be an array." << std::endl;
+            return -1;
+        }
+        if (!std::all_of(fail_ids_input.begin(), fail_ids_input.end(), [](const json& elem){ return elem.is_number_unsigned(); })) {
+            std::cerr << "Error in argument to --fail-ids:" << fail_ids_input.dump() << ". Elements of array must be unsigned numbers" << std::endl;
+            return -1;
+        }
+        std::vector<size_t> fail_ids;
+        std::transform(fail_ids_input.begin(), fail_ids_input.end(), std::back_inserter(fail_ids), [](const json& elem){ return elem.get<size_t>(); });
+
+        DeltaDebug dd;
+        dd.from_json();
+        auto next_test_cases = dd.steps(fail_ids);
+        dd.to_json();
+
+        fs::path output_dir_path(output_dir);
+        if (!fs::is_directory(output_dir_path)) {
+            std::cerr << "Specified output directory: " << output_dir_path << " is not a valid directory.";
+            return -1;
+        }
+
+        if (next_test_cases.empty()) {
+            auto [j_pda, j_initial, j_final] = test_case_to_json(dd.test_case());
+            write_json_file(j_pda, "pda-minimal.json", output_dir_path);
+            write_json_file(j_initial, "initial-minimal.json", output_dir_path);
+            write_json_file(j_final, "final-minimal.json", output_dir_path);
+        } else {
+            size_t i = 0;
+            for (const auto& test_case : next_test_cases) {
+                auto [j_pda, j_initial, j_final] = test_case_to_json(test_case);
+                std::stringstream pda_file_name; pda_file_name << "pda" << i << ".json";
+                std::stringstream initial_file_name; initial_file_name << "initial" << i << ".json";
+                std::stringstream final_file_name; final_file_name << "final" << i << ".json";
+                write_json_file(j_pda, pda_file_name.str(), output_dir_path);
+                write_json_file(j_initial, initial_file_name.str(), output_dir_path);
+                write_json_file(j_final, final_file_name.str(), output_dir_path);
+                ++i;
+            }
+        }
     }
 
     return 0;
