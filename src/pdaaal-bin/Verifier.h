@@ -30,6 +30,7 @@
 #include "utils/json_stream.h"
 #include "parsing/PAutomatonParser.h"
 #include "parsing/PAutomatonJsonParser.h"
+#include <pdaaal/WALiSolver.h>
 #include <pdaaal/Solver.h>
 
 namespace pdaaal {
@@ -77,7 +78,7 @@ namespace pdaaal {
     public:
         explicit Verifier(const std::string& caption) : verification_options{caption} {
             verification_options.add_options()
-                    ("engine,e", po::value<size_t>(&engine), "Engine. 0=no verification, 1=post*, 2=pre*, 3=dual*")
+                    ("engine,e", po::value<size_t>(&engine), "Engine. 0=no verification, 1=post*, 2=pre*, 3=dual*, 4=WALi-post*, 5=WALi-pre*")
                     ("trace,t", po::value<Trace_Type>(&trace_type)->default_value(Trace_Type::None), "Trace type. 0=no trace, 1=any trace, 2=shortest trace, 3=longest trace, 4=fixed-point shortest trace")
                     ;
         }
@@ -86,6 +87,95 @@ namespace pdaaal {
         [[nodiscard]] bool needs_trace_info_pair() const {
             return trace_type == Trace_Type::Longest || trace_type == Trace_Type::ShortestFixedPoint;
         }
+        [[nodiscard]] bool use_wali() const {
+            return engine == 4 || engine == 5;
+        }
+        [[nodiscard]] bool is_wali_prestar() const {
+            return engine == 5;
+        }
+         template <typename instance_t>
+        void verify_wali(instance_t& instance, json_stream& json_out) {
+            if (!use_wali()) return;
+
+            using pda_t = std20::remove_cvref_t<decltype(instance.pda())>;
+            using W = typename pda_t::weight;
+            if constexpr(W::is_signed) {
+                throw std::runtime_error("Signed weight is not supported for WALi engine.");
+                return;
+            } else {
+                using WALi_Weight = std::conditional_t<W::is_weight, std::conditional_t<W::is_vector, VectorUintWeight, UintWeight>, Reach>;
+                bool pre_star = is_wali_prestar();
+                json_out.entry("engine", pre_star ? "WALi-pre*" : "WALi-post*");
+                stopwatch construction_time;
+                wali::wpds::WPDS pda;
+                size_t from_state = 0;
+                for (const auto& state : instance.pda().states()) {
+                    auto from = wali_pdaaal::key_from_size_t(from_state);
+                    for (const auto& [rule, labels] : state._rules) {
+                        auto r = rule;
+                        auto to = wali_pdaaal::key_from_size_t(rule._to);
+                        auto apply = [&pda,&r,&from,&to](const auto& pre) {
+                            WPDS_Rule wpds_rule(from, pre, to);
+                            if constexpr (W::is_weight) {
+                                if constexpr (W::is_vector) {
+                                    wpds_rule._weight = new VectorUintWeight(r._weight);
+                                } else {
+                                    wpds_rule._weight = new UintWeight(r._weight);
+                                }
+                            } else {
+                                wpds_rule._weight = Reach::One();
+                            }
+                            switch (r._operation) {
+                                case PUSH:
+                                    wpds_rule._l1 = wali_pdaaal::key_from_size_t(r._op_label);
+                                    wpds_rule._l2 = pre;
+                                    break;
+                                case SWAP:
+                                    wpds_rule._l1 = wali_pdaaal::key_from_size_t(r._op_label);
+                                    break;
+                                case NOOP:
+                                    wpds_rule._l1 = wpds_rule._pre;
+                                    break;
+                                case POP:
+                                default:
+                                    break;
+                            }
+                            pda.add_rule(wpds_rule._from, wpds_rule._pre, wpds_rule._to, wpds_rule._l1, wpds_rule._l2, wpds_rule._weight);
+                        };
+                        if (labels.wildcard()) {
+                            for (size_t i = 0; i < instance.pda().number_of_labels(); ++i) {
+                                apply(wali_pdaaal::key_from_size_t(i));
+                            }
+                        } else {
+                            for (const auto& pre : labels.labels()) {
+                                apply(wali_pdaaal::key_from_size_t(pre));
+                            }
+                        }
+                    }
+                    ++from_state;
+                }
+                WALi_SolverInstance<WALi_Weight> problem_instance(pda, instance.initial_automaton(), instance.final_automaton(), instance.pda().states().size());
+                construction_time.stop();
+                json_out.entry("construction_time", construction_time.duration());
+                stopwatch reachability_time;
+                bool result;
+                wali::ref_ptr<WALi_Weight> weight;
+                if (pre_star) {
+                    std::tie(result, weight) = problem_instance.pre_star();
+                } else {
+                    std::tie(result, weight) = problem_instance.post_star();
+                }
+                reachability_time.stop();
+                json_out.entry("rtime", reachability_time.duration());
+                if (result) {
+                    if constexpr (W::is_weight) {
+                        json_out.entry("weight", weight->to_json());
+                    }
+                }
+                json_out.entry("result", result);
+            }
+        }
+
 
         template <TraceInfoType trace_info_type = TraceInfoType::Single, typename instance_t>
         void verify(instance_t& instance, json_stream& json_out) {

@@ -116,6 +116,17 @@ int main(int argc, const char** argv) {
         return 1;
     }
 
+    if (verifier.use_wali()) {
+        auto instance_variant = parsing.parse_instance<TraceInfoType::Single>();
+        json_stream json_out;
+        if (!output.silent) { json_out.entry("parsing-duration", parsing.duration()); }
+        std::visit([&verifier,&output,&json_out](auto&& instance) {
+            output.do_output(instance);
+            verifier.verify_wali(*instance,json_out);
+        }, instance_variant);
+        return 0;
+    }
+
     if (verifier.needs_trace_info_pair()) { // Currently, we need to differentiate between these cases at top level.
         run<TraceInfoType::Pair>(parsing, verifier, output);
     } else {
