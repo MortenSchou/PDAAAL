@@ -69,6 +69,19 @@ if (PDAAAL_GetDependencies)
         add_subdirectory(${nlohmann_json_SOURCE_DIR} ${nlohmann_json_BINARY_DIR} EXCLUDE_FROM_ALL)
     endif()
 
+    include(ExternalProject)
+    set(EXTERNAL_INSTALL_LOCATION ${CMAKE_BINARY_DIR}/external)
+    ExternalProject_add(wali-ext
+        GIT_REPOSITORY https://github.com/MortenSchou/WALi-OpenNWA.git
+        GIT_TAG ed5a74702b8f6a47929cd9ea9f05f806cfd88f41
+        CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LOCATION}
+    )
+    add_dependencies(pdaaal wali-ext)
+    target_include_directories(pdaaal PUBLIC
+        $<BUILD_INTERFACE:${EXTERNAL_INSTALL_LOCATION}/include>
+        $<INSTALL_INTERFACE:external/include>
+    )
+
 endif (PDAAAL_GetDependencies)
 
 # Define library dependencies.
