@@ -37,13 +37,13 @@ namespace pdaaal {
 
     class Reach : public wali::Reach {
     public:
-        Reach( bool b ) : wali::Reach(b) {};
+        explicit Reach( bool b ) : wali::Reach(b) {};
         static wali::sem_elem_t One() { static Reach s(true); return s.one(); }
         static wali::sem_elem_t Zero() { static Reach s(false); return s.zero(); }
     };
 
     class UintWeight : public wali::SemElem {
-        uint32_t weight;
+        uint32_t weight{};
     public:
         UintWeight() = default;
         explicit UintWeight( uint32_t b ) : weight(b) {}
@@ -54,7 +54,7 @@ namespace pdaaal {
 
         // zero is the annihilator for extend
         wali::sem_elem_t extend( wali::SemElem* se ) override {
-            auto* rhs = dynamic_cast< UintWeight* >(se);
+            auto* rhs = static_cast< UintWeight* >(se);
             if (is_zero() || rhs->is_zero()) {
                 return zero();
             } else {
@@ -63,7 +63,7 @@ namespace pdaaal {
         }
         // zero is neutral for combine
         wali::sem_elem_t combine( wali::SemElem* se ) override {
-            auto* rhs = dynamic_cast< UintWeight* >(se);
+            auto* rhs = static_cast< UintWeight* >(se);
             if (is_zero() && rhs->is_zero()) {
                 return zero();
             } else {
@@ -303,7 +303,7 @@ namespace pdaaal {
             return automaton;
         }
 
-        std::pair<bool,wali::ref_ptr<W>> post_star() {
+        std::pair<bool,wali::sem_elem_t> post_star() {
             _pda.poststar(_initial, _answer);
             wali::wfa::KeepLeft weight_maker;
             auto product = _answer.intersect(weight_maker, _final);
@@ -311,7 +311,7 @@ namespace pdaaal {
 //            ref_ptr<W> reglangWeight = _answer.reglang_query(_final);
             return std::make_pair(!w->equal(W::Zero()), w);
         }
-        std::pair<bool,wali::ref_ptr<W>> pre_star() {
+        std::pair<bool,wali::sem_elem_t> pre_star() {
             _pda.prestar(_final, _answer);
             wali::wfa::KeepLeft weight_maker;
             auto product = _answer.intersect(weight_maker, _initial);

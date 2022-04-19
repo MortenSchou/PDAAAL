@@ -159,7 +159,7 @@ namespace pdaaal {
                 json_out.entry("construction_time", construction_time.duration());
                 stopwatch reachability_time;
                 bool result;
-                wali::ref_ptr<WALi_Weight> weight;
+                wali::sem_elem_t weight;
                 if (pre_star) {
                     std::tie(result, weight) = problem_instance.pre_star();
                 } else {
@@ -169,7 +169,7 @@ namespace pdaaal {
                 json_out.entry("rtime", reachability_time.duration());
                 if (result) {
                     if constexpr (W::is_weight) {
-                        json_out.entry("weight", weight->to_json());
+                        json_out.entry("weight", dynamic_cast<WALi_Weight*>(weight.get_ptr())->to_json());
                     }
                 }
                 json_out.entry("result", result);
