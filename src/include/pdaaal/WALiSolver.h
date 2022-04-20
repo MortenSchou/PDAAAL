@@ -31,6 +31,7 @@
 #include <wali/wpds/WPDS.hpp>
 #include <wali/Reach.hpp>
 #include <wali/regex/Regex.hpp>
+#include <wali/wfa/State.hpp>
 #include <utility>
 
 namespace pdaaal {
@@ -176,40 +177,31 @@ namespace pdaaal {
                             const pdaaal::NFA<size_t>& initial_nfa, const std::vector<size_t>& initial_states,
                             const pdaaal::NFA<size_t>& final_nfa,   const std::vector<size_t>& final_states,
                             const std::vector<wali::Key>& all_labels, size_t max_pda_state)
-                : _pda(pda),
+                : _pda(pda), _max_pda_state(max_pda_state),
                   _initial(make_CA(initial_nfa, initial_states, all_labels, max_pda_state)),
                   _final(make_CA(final_nfa, final_states, all_labels, max_pda_state)) {};
         template<typename automaton_t>
         WALi_SolverInstance(wali::wpds::WPDS& pda, const automaton_t& initial, const automaton_t& final, size_t max_pda_state)
-                : _pda(pda), _initial(make_CA(initial, max_pda_state)), _final(make_CA(final, max_pda_state)) {}
+                : _pda(pda), _max_pda_state(max_pda_state), _initial(make_CA(initial)), _final(make_CA(final)) {}
 
         template<typename automaton_t>
-        static wali::wfa::WFA make_CA(const automaton_t& p_automaton, size_t max_pda_state) {
+        static wali::wfa::WFA make_CA(const automaton_t& p_automaton) {
             wali::wfa::WFA automaton;
 
             for (const auto& state : p_automaton.states()) {
                 auto from_key = wali_pdaaal::key_from_size_t(state->_id);
+                automaton.addState(from_key, W::Zero());
                 if (state->_accepting) {
                     automaton.add_final_state(from_key);
                 }
                 for (const auto& [to, labels] : state->_edges) {
                     auto to_key = wali_pdaaal::key_from_size_t(to);
+                    automaton.addState(to_key, W::Zero());
                     for (auto [label,_] : labels) {
                         automaton.addTrans(from_key, wali_pdaaal::key_from_size_t(label), to_key, W::One());
                     }
                 }
             }
-
-            // WPDS::CA supports only a single initial state. We simulate multiple initial states using epsilon transitions.
-            automaton.set_initial_state(wali::getKey("initial"));
-            for (size_t pda_state = 0; pda_state < max_pda_state; ++pda_state) { // Yes this is hacky...
-                auto to = wali_pdaaal::key_from_size_t(pda_state);
-                std::stringstream ss;
-                ss << pda_state;
-                auto label = wali::getKey(ss.str()); // We need the label to be different from the normal labels. So we use string-to-key.
-                automaton.addTrans(automaton.initial_state(), label, to, W::One());
-            }
-
             return automaton;
         }
 
@@ -282,9 +274,14 @@ namespace pdaaal {
                     }
                 }
             }
-            // TODO: Add trans to all PDS states. Not just those in initial_state. Alternatively, do something smart after pre*/post*.
-            // WPDS::CA supports only a single initial state. We simulate multiple initial states using epsilon transitions.
-            automaton.set_initial_state(wali::getKey("initial"));
+            return automaton;
+        }
+
+        static void fix_initial_states(wali::wfa::WFA& automaton, size_t max_pda_state) {
+            // wali::wfa supports only a single initial state. We simulate multiple initial states using epsilon transitions.
+            auto i_key = wali::getKey("initial");
+            automaton.addState(i_key, W::Zero());
+            automaton.set_initial_state(i_key);
             for (size_t pda_state = 0; pda_state < max_pda_state; ++pda_state) { // Yes this is hacky...
                 auto to = wali_pdaaal::key_from_size_t(pda_state);
                 std::stringstream ss;
@@ -292,33 +289,26 @@ namespace pdaaal {
                 auto label = wali::getKey(ss.str()); // We need the label to be different from the normal labels. So we use string-to-key.
                 automaton.addTrans(automaton.initial_state(), label, to, W::One());
             }
-//            for (auto initial_state : initial_states) {
-//                auto to = WPDS_Rule<W>::key_from_size_t(initial_state);
-//                std::stringstream ss;
-//                ss << initial_state;
-//                auto label = str2key(ss.str()); // We need the label to be different from the normal labels. So we use string-to-key.
-//                automaton.add(automaton.initial_state(), label, to, W::One());
-//            }
-
-            return automaton;
         }
 
         std::pair<bool,wali::sem_elem_t> post_star() {
             _pda.poststar(_initial, _answer);
+            fix_initial_states(_answer, _max_pda_state);
+            fix_initial_states(_final, _max_pda_state);
             wali::wfa::KeepLeft weight_maker;
             auto product = _answer.intersect(weight_maker, _final);
-            auto w = product.toRegex()->solve();
-//            ref_ptr<W> reglangWeight = _answer.reglang_query(_final);
+            product.path_summary();
+            auto w = product.getState(product.getInitialState())->weight();
             return std::make_pair(!w->equal(W::Zero()), w);
         }
         std::pair<bool,wali::sem_elem_t> pre_star() {
             _pda.prestar(_final, _answer);
+            fix_initial_states(_answer, _max_pda_state);
+            fix_initial_states(_initial, _max_pda_state);
             wali::wfa::KeepLeft weight_maker;
             auto product = _answer.intersect(weight_maker, _initial);
-            auto w = product.toRegex()->solve();
-            // OR:
-//            product.path_summary();
-//            auto w = product.getState(product.getInitialState())->weight();
+            product.path_summary();
+            auto w = product.getState(product.getInitialState())->weight();
             return std::make_pair(!w->equal(W::Zero()), w);
         }
 //        void get_trace() {
@@ -337,6 +327,7 @@ namespace pdaaal {
 
     private:
         wali::wpds::WPDS& _pda;
+        size_t _max_pda_state;
         wali::wfa::WFA _initial;
         wali::wfa::WFA _final;
         wali::wfa::WFA _answer;
