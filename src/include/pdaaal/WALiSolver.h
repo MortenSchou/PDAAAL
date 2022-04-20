@@ -31,6 +31,8 @@
 #include <wali/wpds/WPDS.hpp>
 #include <wali/Reach.hpp>
 #include <wali/regex/Regex.hpp>
+#include <wali/ShortestPathSemiring.hpp>
+#include <wali/ShortestPathWorklist.hpp>
 #include <wali/wfa/State.hpp>
 #include <utility>
 
@@ -43,53 +45,12 @@ namespace pdaaal {
         static wali::sem_elem_t Zero() { static Reach s(false); return s.zero(); }
     };
 
-    class UintWeight : public wali::SemElem {
-        uint32_t weight{};
+    class UintWeight : public wali::ShortestPathSemiring {
     public:
         UintWeight() = default;
-        explicit UintWeight( uint32_t b ) : weight(b) {}
-        [[nodiscard]] wali::sem_elem_t one() const override { static wali::sem_elem_t O(new UintWeight(0)); return O; }
-        [[nodiscard]] wali::sem_elem_t zero() const override { static wali::sem_elem_t Z(new UintWeight(std::numeric_limits<uint32_t>::max())); return Z; }
-        static wali::sem_elem_t One() { static UintWeight s; return s.one(); }
-        static wali::sem_elem_t Zero() { static UintWeight s; return s.zero(); }
-
-        // zero is the annihilator for extend
-        wali::sem_elem_t extend( wali::SemElem* se ) override {
-            auto* rhs = static_cast< UintWeight* >(se);
-            if (is_zero() || rhs->is_zero()) {
-                return zero();
-            } else {
-                return new UintWeight(weight + rhs->weight);
-            }
-        }
-        // zero is neutral for combine
-        wali::sem_elem_t combine( wali::SemElem* se ) override {
-            auto* rhs = static_cast< UintWeight* >(se);
-            if (is_zero() && rhs->is_zero()) {
-                return zero();
-            } else {
-                return new UintWeight(std::min(weight, rhs->weight));
-            }
-        }
-        bool equal( wali::SemElem* se ) const override {
-            auto* rhs = dynamic_cast< UintWeight* >(se);
-            return ( weight == rhs->weight );
-        }
-        std::ostream& print( std::ostream& o ) const override {
-            if(is_zero()) {
-                o << "ZERO";
-            } else {
-                o << weight;
-            }
-            return o;
-        }
-        [[nodiscard]] nlohmann::json to_json() const {
-            return is_zero() ? json() : json(weight);
-        }
-    private:
-        [[nodiscard]] bool is_zero() const {
-            return weight == std::numeric_limits<uint32_t>::max();
-        }
+        explicit UintWeight( unsigned int b ) : ShortestPathSemiring(b) {}
+        static wali::sem_elem_t One() { static wali::sem_elem_t O(wali::ShortestPathSemiring::make_one()); return O; }
+        static wali::sem_elem_t Zero() { static wali::sem_elem_t Z(wali::ShortestPathSemiring::make_zero()); return Z; }
     };
 
     class VectorUintWeight : public wali::SemElem {
@@ -297,7 +258,7 @@ namespace pdaaal {
             fix_initial_states(_final, _max_pda_state);
             wali::wfa::KeepLeft weight_maker;
             auto product = _answer.intersect(weight_maker, _final);
-            product.path_summary();
+            product.path_summary_iterative_original();
             auto w = product.getState(product.getInitialState())->weight();
             return std::make_pair(!w->equal(W::Zero()), w);
         }
@@ -307,7 +268,7 @@ namespace pdaaal {
             fix_initial_states(_initial, _max_pda_state);
             wali::wfa::KeepLeft weight_maker;
             auto product = _answer.intersect(weight_maker, _initial);
-            product.path_summary();
+            product.path_summary_iterative_original();
             auto w = product.getState(product.getInitialState())->weight();
             return std::make_pair(!w->equal(W::Zero()), w);
         }

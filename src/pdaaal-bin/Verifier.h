@@ -169,7 +169,12 @@ namespace pdaaal {
                 json_out.entry("rtime", reachability_time.duration());
                 if (result) {
                     if constexpr (W::is_weight) {
-                        json_out.entry("weight", dynamic_cast<WALi_Weight*>(weight.get_ptr())->to_json());
+                        if constexpr (W::is_vector) {
+                            json_out.entry("weight", dynamic_cast<WALi_Weight*>(weight.get_ptr())->to_json());
+                        } else {
+                            auto w = dynamic_cast<wali::ShortestPathSemiring*>(weight.get_ptr());
+                            json_out.entry("weight", w->getNum() == (unsigned int)(-1) ? json() : json(w->getNum()));
+                        }
                     }
                 }
                 json_out.entry("result", result);
