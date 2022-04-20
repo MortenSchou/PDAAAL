@@ -253,6 +253,9 @@ namespace pdaaal {
         }
 
         std::pair<bool,wali::sem_elem_t> post_star() {
+            if constexpr(std::is_same_v<W,UintWeight>) {
+                _pda.setWorklist(new wali::ShortestPathWorklist());
+            }
             _pda.poststar(_initial, _answer);
             fix_initial_states(_answer, _max_pda_state);
             fix_initial_states(_final, _max_pda_state);
@@ -263,6 +266,9 @@ namespace pdaaal {
             return std::make_pair(!w->equal(W::Zero()), w);
         }
         std::pair<bool,wali::sem_elem_t> pre_star() {
+            if constexpr(std::is_same_v<W,UintWeight>) {
+                _pda.setWorklist(new wali::ShortestPathWorklist());
+            }
             _pda.prestar(_final, _answer);
             fix_initial_states(_answer, _max_pda_state);
             fix_initial_states(_initial, _max_pda_state);
