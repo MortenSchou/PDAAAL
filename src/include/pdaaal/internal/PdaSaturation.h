@@ -85,7 +85,6 @@ namespace pdaaal::internal {
         const size_t _n_pda_states;
         const size_t _n_automaton_states;
         const size_t _n_pda_labels;
-        std::unordered_set<temp_edge_t, absl::Hash<temp_edge_t>> _edges;
         std::stack<temp_edge_t> _workset;
         std::vector<std::vector<std::pair<size_t,uint32_t>>> _rel;
         std::vector<std::vector<std::pair<size_t, size_t>>> _delta_prime;
@@ -96,7 +95,7 @@ namespace pdaaal::internal {
             for (const auto &from : _automaton.states()) {
                 for (const auto &[to,labels] : from->_edges) {
                     for (const auto &[label,_] : labels) {
-                        insert_edge(from->_id, label, to, trace_info::make_default());
+                        _workset.emplace(from->_id, label, to);
                     }
                 }
             }
@@ -113,14 +112,10 @@ namespace pdaaal::internal {
             }
         }
         void insert_edge(size_t from, uint32_t label, size_t to, trace_t trace) {
-            auto res = _edges.emplace(from, label, to);
-            if (res.second) { // New edge is not already in edges (rel U workset).
+            if (_automaton.emplace_edge(from, label, to, edge_anno::from_trace_info(trace)).second) { // New edge is not already in edges (rel U workset).
                 _workset.emplace(from, label, to);
-                if (!trace.is_null()) { // Don't add existing edges
-                    _automaton.add_edge(from, to, label, edge_anno::from_trace_info(trace));
-                    if constexpr (ET) {
-                        _found = _found || _early_termination(from, label, to, edge_anno::from_trace_info(trace));
-                    }
+                if constexpr (ET) {
+                    _found = _found || _early_termination(from, label, to, edge_anno::from_trace_info(trace));
                 }
             }
         };
@@ -205,6 +200,7 @@ namespace pdaaal::internal {
         using edge_anno = edge_annotation<W,TraceInfoType::Single>;
         using edge_anno_t = edge_annotation_t<W,TraceInfoType::Single>;
         using p_automaton_t = PAutomaton<W>;
+        static constexpr auto epsilon = p_automaton_t::epsilon;
     public:
         explicit PostStarSaturation(p_automaton_t& automaton, const early_termination_fn<W>& early_termination = [](size_t, uint32_t, size_t, edge_anno_t) -> bool { return false; })
                 : _automaton(automaton), _early_termination(early_termination), _pda_states(_automaton.pda().states()),
@@ -225,18 +221,17 @@ namespace pdaaal::internal {
         std::unordered_map<std::pair<size_t, uint32_t>, size_t, absl::Hash<std::pair<size_t, uint32_t>>> _q_prime{};
 
         size_t _n_automaton_states{};
-        std::unordered_set<temp_edge_t, absl::Hash<temp_edge_t>> _edges;
         std::queue<temp_edge_t> _workset;
         std::vector<std::vector<std::pair<size_t,uint32_t>>> _rel1; // faster access for lookup _from -> (_to, _label)
-        std::vector<std::vector<size_t>> _rel2; // faster access for lookup _to -> _from  (when _label is uint32_t::max)
+        std::vector<std::vector<size_t>> _rel2; // faster access for lookup _to -> _from  (when _label is epsilon)
 
         bool _found = false;
 
         void initialize() {
             // for <p, y> -> <p', y1 y2> do  (line 3)
             //   Q' U= {q_p'y1}              (line 4)
-            for (auto &state : _pda_states) {
-                for (auto &[rule, labels] : state._rules) {
+            for (const auto& state : _pda_states) {
+                for (const auto& [rule, labels] : state._rules) {
                     if (rule._operation == PUSH) {
                         auto res = _q_prime.emplace(std::make_pair(rule._to, rule._op_label), _automaton.next_state_id());
                         if (res.second) {
@@ -255,34 +250,38 @@ namespace pdaaal::internal {
                 for (const auto& [to,labels] : from->_edges) {
                     assert(!labels.contains(epsilon)); // PostStar algorithm assumes no epsilon transitions in the NFA.
                     for (const auto& [label,_] : labels) {
-                        insert_edge(from->_id, label, to, trace_info::make_default(), from->_id >= _n_pda_states);
+                        if (from->_id < _n_pda_states) {
+                            _workset.emplace(from->_id, label, to);
+                        } else {
+                            insert_rel(from->_id, label, to);
+                        }
                     }
                 }
             }
         }
-        void insert_edge(size_t from, uint32_t label, size_t to, trace_t trace, bool direct_to_rel = false) {
-            auto res = _edges.emplace(from, label, to);
-            if (res.second) { // New edge is not already in edges (rel U workset).
-                if (direct_to_rel) {
-                    _rel1[from].emplace_back(to, label);
-                    if (label == epsilon && to >= _n_Q) {
-                        _rel2[to - _n_Q].push_back(from);
-                    }
-                } else {
-                    _workset.emplace(from, label, to);
-                }
-                if (!trace.is_null()) { // Don't add existing edges
-                    if (label == epsilon) {
-                        _automaton.add_epsilon_edge(from, to, edge_anno::from_trace_info(trace));
-                    } else {
-                        _automaton.add_edge(from, to, label, edge_anno::from_trace_info(trace));
-                    }
-                }
+
+        void insert_rel(size_t from, uint32_t label, size_t to) {
+            _rel1[from].emplace_back(to, label);
+            if (label == epsilon && to >= _n_Q) {
+                _rel2[to - _n_Q].push_back(from);
+            }
+        }
+        void insert_edge(size_t from, uint32_t label, size_t to, trace_t trace) {
+            if (_automaton.emplace_edge(from, label, to, edge_anno::from_trace_info(trace)).second) {
+                _workset.emplace(from, label, to);
                 if constexpr (ET) {
                     _found = _found || _early_termination(from, label, to, edge_anno::from_trace_info(trace));
                 }
             }
-        };
+        }
+        void insert_edge_rel(size_t from, uint32_t label, size_t to, trace_t trace) {
+            if (_automaton.emplace_edge(from, label, to, edge_anno::from_trace_info(trace)).second) {
+                insert_rel(from, label, to);
+                if constexpr (ET) {
+                    _found = _found || _early_termination(from, label, to, edge_anno::from_trace_info(trace));
+                }
+            }
+        }
 
     public:
         void step() {
@@ -291,37 +290,34 @@ namespace pdaaal::internal {
             t = _workset.front();
             _workset.pop();
             // rel = rel U {t} (line 8)   (membership test on line 7 is done in insert_edge).
-            _rel1[t._from].emplace_back(t._to, t._label);
-            if (t._label == epsilon && t._to >= _n_Q) {
-                _rel2[t._to - _n_Q].push_back(t._from);
-            }
+            insert_rel(t._from, t._label, t._to);
 
             // if y != epsilon (line 9)
             if (t._label != epsilon) {
-                const auto &rules = _pda_states[t._from]._rules;
+                const auto& rules = _pda_states[t._from]._rules;
                 for (size_t rule_id = 0; rule_id < rules.size(); ++rule_id) {
-                    const auto &[rule,labels] = rules[rule_id];
+                    const auto& [rule,labels] = rules[rule_id];
                     if (!labels.contains(t._label)) { continue; }
                     auto trace = p_automaton_t::new_post_trace(t._from, rule_id, t._label);
                     switch (rule._operation) {
                         case POP: // (line 10-11)
-                            insert_edge(rule._to, epsilon, t._to, trace, false);
+                            insert_edge(rule._to, epsilon, t._to, trace);
                             break;
                         case SWAP: // (line 12-13)
-                            insert_edge(rule._to, rule._op_label, t._to, trace, false);
+                            insert_edge(rule._to, rule._op_label, t._to, trace);
                             break;
                         case NOOP:
-                            insert_edge(rule._to, t._label, t._to, trace, false);
+                            insert_edge(rule._to, t._label, t._to, trace);
                             break;
                         case PUSH: // (line 14)
                             assert(_q_prime.find(std::make_pair(rule._to, rule._op_label)) != std::end(_q_prime));
                             size_t q_new = _q_prime[std::make_pair(rule._to, rule._op_label)];
-                            insert_edge(rule._to, rule._op_label, q_new, trace, false); // (line 15)
-                            insert_edge(q_new, t._label, t._to, trace, true); // (line 16)
+                            insert_edge(rule._to, rule._op_label, q_new, trace); // (line 15)
+                            insert_edge_rel(q_new, t._label, t._to, trace); // (line 16)
                             if (!_rel2[q_new - _n_Q].empty()) {
                                 auto trace_q_new = p_automaton_t::new_post_trace(q_new);
                                 for (auto f : _rel2[q_new - _n_Q]) { // (line 17)
-                                    insert_edge(f, t._label, t._to, trace_q_new, false); // (line 18)
+                                    insert_edge(f, t._label, t._to, trace_q_new); // (line 18)
                                 }
                             }
                             break;
@@ -330,8 +326,8 @@ namespace pdaaal::internal {
             } else {
                 if (!_rel1[t._to].empty()) {
                     auto trace = p_automaton_t::new_post_trace(t._to);
-                    for (auto e : _rel1[t._to]) { // (line 20)
-                        insert_edge(t._from, e.second, e.first, trace, false); // (line 21)
+                    for (const auto& [to,label] : _rel1[t._to]) { // (line 20)
+                        insert_edge(t._from, label, to, trace); // (line 21)
                     }
                 }
             }
@@ -644,27 +640,26 @@ namespace pdaaal::internal {
 
         template<bool change_is_bottom = false>
         void update_edge(size_t from, uint32_t label, size_t to, const weight_t& edge_weight, trace_t trace) {
-            auto [it, fresh] = _edges.emplace(temp_edge_t{from, label, to}, edge_weight);
             bool is_changed = false;
-            if (fresh) {
-                if constexpr(change_is_bottom) {
-                    assert(false); // We should add all fresh edges during the first pass of rounds.
-                }
-                _rel[from].emplace_back(to, label); // Allow fast iteration over _edges matching specific from.
-                if (!trace.is_null()) {
-                    _automaton.add_edge(from, to, label, std::make_pair(std::make_pair(trace,trace), edge_weight));
-                }
-                is_changed = true;
-            } else {
-                if (solverW::less(edge_weight, it->second)) {
-                    if constexpr(change_is_bottom) {
-                        it->second = solverW::bottom();
-                        _automaton.update_edge(from, to, label, std::make_pair(trace, solverW::bottom()));
-                    } else {
-                        it->second = edge_weight;
-                        _automaton.update_edge(from, to, label, std::make_pair(trace, edge_weight));
-                    }
+            if constexpr(change_is_bottom) {
+                auto ptr = _automaton.get_edge(from, label, to);
+                assert(ptr != nullptr);
+                if (solverW::less(edge_weight, ptr->second)) {
+                    ptr->first.second = trace; // We update the second trace_info in the pair, keeping the first one unchanged.
+                    ptr->second = solverW::bottom(); // Update weight.
                     is_changed = true;
+                }
+            } else {
+                auto [it, fresh] = _automaton.emplace_edge(from, label, to, std::make_pair(std::make_pair(trace,trace), edge_weight));
+                if (fresh) {
+                    _rel[from].emplace_back(to, label); // Allow fast iteration over _edges matching specific from.
+                    is_changed = true;
+                } else {
+                    if (solverW::less(edge_weight, it->second.second)) {
+                        it->second.first.second = trace;
+                        it->second.second = edge_weight;
+                        is_changed = true;
+                    }
                 }
             }
             if (is_changed) {
@@ -706,16 +701,16 @@ namespace pdaaal::internal {
         const size_t _n_pda_states;
         const size_t _n_pda_labels;
 
-        std::unordered_map<temp_edge_t, weight_t, absl::Hash<temp_edge_t>> _edges;
         std::vector<std::vector<std::pair<size_t,uint32_t>>> _rel; // Fast access to _edges based on _from.
-        std::vector<std::vector<std::tuple<size_t, size_t>>> _delta_prime;
+        std::vector<fut::vector_set<std::pair<size_t, size_t>>> _delta_prime;
 
         void initialize() {
             for (const auto& from : _automaton.states()) {
                 for (const auto& [to,labels] : from->_edges) {
                     for (const auto& [label,tw] : labels) {
                         assert(tw == std::make_pair(trace_info::make_default(), W::zero()));
-                        update_edge(from->_id, label, to, W::zero(), trace_t());
+                        _rel[from->_id].emplace_back(to, label); // Allow fast iteration over _edges matching specific from.
+                        parent_t::emplace(from->_id, label, to);
                     }
                 }
             }
@@ -734,16 +729,16 @@ namespace pdaaal::internal {
     public:
         template<bool change_is_bottom = false>
         bool step_with(temp_edge_t&& t) {
-            assert(_edges.find(t) != _edges.end());
-            auto w = _edges.find(t)->second;
+            assert(_automaton.get_edge(t._from, t._label, t._to) != nullptr);
+            auto w = _automaton.get_edge(t._from, t._label, t._to)->second;
 
             // (line 7-8 for \Delta')
             for (const auto& [state, rule_id] : _delta_prime[t._from]) { // Loop over delta_prime (that match with t->from)
                 const auto& [rule, labels] = _pda_states[state]._rules[rule_id];
                 if (labels.contains(t._label)) {
-                    assert(_edges.find(temp_edge_t{rule._to, rule._op_label, t._from}) != _edges.end());
+                    assert(_automaton.get_edge(rule._to, rule._op_label, t._from) != nullptr);
                     update_edge<change_is_bottom>(state, t._label, t._to,
-                                                  solverW::add(solverW::add(rule._weight, _edges.find(temp_edge_t{rule._to, rule._op_label, t._from})->second), w),
+                                                  solverW::add(solverW::add(rule._weight, _automaton.get_edge(rule._to, rule._op_label, t._from)->second), w),
                                                   p_automaton_t::new_pre_trace(rule_id, t._from));
                 }
             }
@@ -773,12 +768,13 @@ namespace pdaaal::internal {
                             if (rule._op_label == t._label) {
                                 auto w_temp = solverW::add(rule._weight, w);
                                 // (line 10)
-                                _delta_prime[t._to].emplace_back(pre_state, rule_id); // TODO: Check existence before adding(?)
+                                _delta_prime[t._to].emplace(pre_state, rule_id);
                                 for (const auto& [rel_to, rel_label] : _rel[t._to]) { // (line 11-12)
                                     if (labels.contains(rel_label)) {
-                                        auto it = _edges.find(temp_edge_t{t._to, rel_label, rel_to});
-                                        assert(it != _edges.end());
-                                        update_edge<change_is_bottom>(pre_state, rel_label, rel_to, solverW::add(w_temp, it->second), p_automaton_t::new_pre_trace(rule_id, t._to));
+                                        assert(_automaton.get_edge(t._to, rel_label, rel_to) != nullptr);
+                                        update_edge<change_is_bottom>(pre_state, rel_label, rel_to,
+                                                solverW::add(w_temp, _automaton.get_edge(t._to, rel_label, rel_to)->second),
+                                                p_automaton_t::new_pre_trace(rule_id, t._to));
                                     }
                                 }
                             }

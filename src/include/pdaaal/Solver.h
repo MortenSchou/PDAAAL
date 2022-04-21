@@ -89,7 +89,7 @@ namespace pdaaal {
         static bool pre_star_accepts(internal::PAutomaton<W> &automaton, size_t state, const std::vector<uint32_t> &stack) {
             if (stack.size() == 1) {
                 auto s_label = stack[0];
-                return pre_star<W,true>(automaton, [&automaton, state, s_label](size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W>) -> bool {
+                return automaton.accepts(state, stack) || pre_star<W,true>(automaton, [&automaton, state, s_label](size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W>) -> bool {
                     return from == state && label == s_label && automaton.states()[to]->_accepting;
                 });
             } else {
@@ -123,7 +123,7 @@ namespace pdaaal {
         static bool post_star_accepts(internal::PAutomaton<W> &automaton, size_t state, const std::vector<uint32_t> &stack) {
             if (stack.size() == 1) {
                 auto s_label = stack[0];
-                return post_star<trace_type,W,true>(automaton, [&automaton, state, s_label](size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W>) -> bool {
+                return automaton.accepts(state, stack) || post_star<trace_type,W,true>(automaton, [&automaton, state, s_label](size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W>) -> bool {
                     return from == state && label == s_label && automaton.states()[to]->_accepting;
                 });
             } else {
@@ -332,9 +332,13 @@ namespace pdaaal {
 
             if (tb.post()) { // post* was used
                 std::reverse(trace.begin(), trace.end());
-                return std::make_tuple(trace[0].from(), trace, start_stack, goal_stack, start_path, goal_path);
+                return std::make_tuple(trace[0].from(), std::move(trace),
+                                       std::move(start_stack), std::move(goal_stack),
+                                       std::move(start_path), std::move(goal_path));
             } else { // pre* was used
-                return std::make_tuple(paths.front_state().first, trace, goal_stack, start_stack, goal_path, start_path);
+                return std::make_tuple(paths.front_state().first, std::move(trace),
+                                       std::move(goal_stack), std::move(start_stack),
+                                       std::move(goal_path), std::move(start_path));
             }
         }
 
@@ -361,7 +365,9 @@ namespace pdaaal {
             auto [trace2, final_stack, final_path] = _get_trace_stack_path(final_automaton, std::move(final_automaton_path));
             // Concat traces
             trace.insert(trace.end(), trace2.begin(), trace2.end());
-            return std::make_tuple(trace[0].from(), trace, initial_stack, final_stack, initial_path, final_path);
+            return std::make_tuple(trace[0].from(), std::move(trace),
+                                   std::move(initial_stack), std::move(final_stack),
+                                   std::move(initial_path), std::move(final_path));
         }
 
         template <typename W, TraceInfoType trace_info_type>
@@ -377,7 +383,7 @@ namespace pdaaal {
             }
             // Get accepting path of initial stack (and the initial stack itself - for post*)
             auto [path, stack] = tb.path().get_path_and_stack();
-            return {trace, stack, path};
+            return {std::move(trace), std::move(stack), std::move(path)};
         }
     };
 
