@@ -67,10 +67,41 @@ namespace pdaaal {
         }
 
         // Returns whether an accepting state in the product automaton was reached.
+        template<bool ET = true>
         bool add_edge_product(size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W> trace) {
-            return add_edge(from, label, to, trace,
+            return add_edge<true,false,ET>(from, label, to, trace,
                             _swap_initial_final ? _final : _initial,
                             _swap_initial_final ? _initial : _final);
+        }
+        template<bool edge_in_first = true>
+        void update_edge_product(size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W> trace) {
+            const auto& fast_lookup = constexpr_ternary<edge_in_first>(_id_fast_lookup, _id_fast_lookup_back);
+            std::vector<std::pair<size_t,size_t>> from_states;
+            if (from < fast_lookup.size()) { // Avoid out-of-bounds.
+                from_states = fast_lookup[from];
+            }
+            if (from < _pda_size) {
+                from_states.emplace_back(from, from); // Initial states are not stored in _id_fast_lookup.
+            }
+            const auto& current = constexpr_ternary<edge_in_first>(_initial, _final);
+            const auto& other = constexpr_ternary<edge_in_first>(_final, _initial);
+            auto current_to = current.states()[to].get();
+            std::vector<size_t> waiting;
+            for (auto [other_from, product_from] : from_states) { // Iterate through reachable 'from-states'.
+                if (label == epsilon) {
+                    auto [fresh, product_to] = get_product_state(swap_if<!edge_in_first>(current_to, other.states()[other_from].get()));
+                    assert(!fresh);
+                    _product.update_edge(product_from, product_to, label, trace);
+                } else {
+                    for (const auto& [other_to,other_labels] : other.states()[other_from]->_edges) {
+                        if (other_labels.contains(label)) {
+                            auto [fresh, product_to] = get_product_state(swap_if<!edge_in_first>(current_to, other.states()[other_to].get()));
+                            assert(!fresh);
+                            _product.update_edge(product_from, product_to, label, trace);
+                        }
+                    }
+                }
+            }
         }
 
         // This is for the dual_search mode:
@@ -102,6 +133,22 @@ namespace pdaaal {
         }
         [[nodiscard]] const product_automaton_t& product_automaton() const {
             return _product;
+        }
+        template<Trace_Type trace_type = Trace_Type::None>
+        void automaton_to_dot(std::ostream &out) {
+            automaton_to_dot<trace_type>(out, automaton());
+        }
+        template<Trace_Type trace_type = Trace_Type::None>
+        void product_automaton_to_dot(std::ostream &out) {
+            automaton_to_dot<trace_type>(out, product_automaton());
+        }
+        template<Trace_Type trace_type = Trace_Type::None, typename aut_t>
+        void automaton_to_dot(std::ostream &out, const aut_t& automaton) {
+            automaton.template to_dot<trace_type>(out,
+                [this](std::ostream& s, const uint32_t& label){ s << pda().get_symbol(label); },
+                [this,pda_size=pda().states().size()](std::ostream& s, const size_t& state_id){
+                    state_id < pda_size ? s << pda().get_state(state_id) : s << state_id;
+            });
         }
 
         const pda_t& pda() const {
@@ -163,7 +210,7 @@ namespace pdaaal {
         }
 
     private:
-        template<bool edge_in_first = true, bool needs_back_lookup = false>
+        template<bool edge_in_first = true, bool needs_back_lookup = false, bool ET = true>
         bool add_edge(size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W> trace,
                       const automaton_t& first, const automaton_t& second) { // States in first and second automaton corresponds to respectively first and second component of the states in product automaton.
             static_assert(edge_in_first || needs_back_lookup, "If you insert edge in the second automaton, then you must also enable using _id_fast_lookup_back to keep the relevant information.");
@@ -197,15 +244,17 @@ namespace pdaaal {
                     } else {
                         _product.add_edge(product_from, product_to, label, trace);
                     }
-                    if (_product.has_accepting_state()) {
-                        return true; // Early termination
+                    if constexpr(ET) {
+                        if (_product.has_accepting_state()) {
+                            return true; // Early termination
+                        }
                     }
                     if (fresh) {
                         waiting.push_back(product_to); // If the 'to-state' is new (was not previously reachable), we need to continue constructing from there.
                     }
                 }
             }
-            return construct_reachable<needs_back_lookup>(waiting, first, second);
+            return construct_reachable<needs_back_lookup,ET>(waiting, first, second);
         }
 
         // Returns whether an accepting state in the product automaton was reached.
