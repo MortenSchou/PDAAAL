@@ -6,7 +6,7 @@ i=0
 FAIL=""
 while true; do
     echo -n "[${i}] Starting"
-    cat dd_state | build/benchmark/delta-debug --step ${FAIL} -f temp.json > dd_state.tmp && mv dd_state.tmp dd_state || break
+    <dd_state build/benchmark/delta-debug --step "${FAIL}" -f temp.json >dd_state.tmp && mv dd_state.tmp dd_state || break
     echo -ne "\r[${i}] Delta-debug done"
     build/bin/pdaaal --input temp.json --compare
     EXIT_CODE=$?
