@@ -8,3 +8,7 @@
 
 #target_link_libraries(int_benchmark LINK_PUBLIC ptrie murmur tbb jemalloc)
 #target_link_libraries(benchmark LINK_PUBLIC ptrie murmur tbb jemalloc)
+
+add_executable(delta-debug)
+target_sources(delta-debug PRIVATE DeltaDebug.cpp)
+target_link_libraries(delta-debug PRIVATE nlohmann_json::nlohmann_json Boost::program_options)

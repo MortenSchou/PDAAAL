@@ -79,12 +79,53 @@ namespace pdaaal {
             verification_options.add_options()
                     ("engine,e", po::value<size_t>(&engine), "Engine. 0=no verification, 1=post*, 2=pre*, 3=dual*")
                     ("trace,t", po::value<Trace_Type>(&trace_type)->default_value(Trace_Type::None), "Trace type. 0=no trace, 1=any trace, 2=shortest trace, 3=longest trace, 4=fixed-point shortest trace")
+                     ("compare", po::bool_switch(&compare), "Compare results from two engines (used by delta-debugging).")
                     ;
         }
         [[nodiscard]] const po::options_description& options() const { return verification_options; }
 
         [[nodiscard]] bool needs_trace_info_pair() const {
             return trace_type == Trace_Type::Longest || trace_type == Trace_Type::ShortestFixedPoint;
+        }
+        [[nodiscard]] bool compare_enabled() const {
+            return compare;
+        }
+
+        template <typename instance_t>
+        std::pair<bool,json> compare_part1(instance_t& instance) {
+            using pda_t = std20::remove_cvref_t<decltype(instance.pda())>;
+            if constexpr (pda_t::has_weight) {
+                bool result;
+                json j_weight;
+                {
+                    result = Solver::post_star_accepts<Trace_Type::Shortest>(instance);
+                    if (result) {
+                        j_weight = Solver::get_trace<Trace_Type::Shortest>(instance).second;
+                    }
+                }
+                return std::make_pair(result,j_weight);
+            } else {
+                assert(false);
+                throw std::runtime_error("error: --compare is currently only supported for weighted PDA.");
+            }
+        }
+        template <typename instance_t>
+        std::pair<bool,json> compare_part2(instance_t& instance) {
+            using pda_t = std20::remove_cvref_t<decltype(instance.pda())>;
+            if constexpr (pda_t::has_weight) {
+                bool result;
+                json j_weight;
+                {
+                    result = Solver::post_star_fixed_point_accepts<Trace_Type::ShortestFixedPoint>(instance);
+                    if (result) {
+                        j_weight = Solver::get_trace<Trace_Type::ShortestFixedPoint>(instance).second;
+                    }
+                }
+                return std::make_pair(result,j_weight);
+            } else {
+                assert(false);
+                throw std::runtime_error("error: --compare is currently only supported for weighted PDA.");
+            }
         }
 
         template <TraceInfoType trace_info_type = TraceInfoType::Single, typename instance_t>
@@ -318,6 +359,7 @@ namespace pdaaal {
         po::options_description verification_options;
         size_t engine = 0;
         Trace_Type trace_type = Trace_Type::None;
+        bool compare = false;
     };
 }
 

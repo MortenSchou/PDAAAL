@@ -116,6 +116,27 @@ int main(int argc, const char** argv) {
         return 1;
     }
 
+    if (verifier.compare_enabled()) {
+        bool result1, result2;
+        json weight1, weight2;
+
+        auto instance_variant1 = parsing.parse_instance<TraceInfoType::Single>();
+        std::tie(result1, weight1) = std::visit([&verifier](auto&& instance) {
+            return verifier.compare_part1(*instance);
+        }, instance_variant1);
+
+        auto instance_variant2 = parsing.parse_instance<TraceInfoType::Pair>();
+        std::tie(result2, weight2) = std::visit([&verifier](auto&& instance) {
+            return verifier.compare_part2(*instance);
+        }, instance_variant2);
+
+        if (result1 != result2) return 1;
+        if (result1) {
+            if (weight1 != weight2) return 1;
+        }
+        return 0;
+    }
+
     if (verifier.needs_trace_info_pair()) { // Currently, we need to differentiate between these cases at top level.
         run<TraceInfoType::Pair>(parsing, verifier, output);
     } else {
