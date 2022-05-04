@@ -1,14 +1,17 @@
 #!/bin/bash
 
-build/benchmark/delta-debug --init -f examples/Surfnet-63.json > dd_state
+#BIN_DIR="build"
+BIN_DIR="cmake-build-release"
+
+${BIN_DIR}/benchmark/delta-debug --init -f examples/Switch-67-conf-8.json > dd_state
 echo "Init done"
 i=0
 FAIL=""
 while true; do
     echo -n "[${i}] Starting"
-    <dd_state build/benchmark/delta-debug --step "${FAIL}" -f temp.json >dd_state.tmp && mv dd_state.tmp dd_state || break
+    <dd_state ${BIN_DIR}/benchmark/delta-debug --step "${FAIL}" -f temp.json >dd_state.tmp && mv dd_state.tmp dd_state || break
     echo -ne "\r[${i}] Delta-debug done"
-    build/bin/pdaaal --input temp.json --compare
+    ${BIN_DIR}/bin/pdaaal --input temp.json --compare
     EXIT_CODE=$?
     echo -ne "\r[${i}] PDAAAL test done"
     if [ "${EXIT_CODE}" -eq "0" ] ; then
