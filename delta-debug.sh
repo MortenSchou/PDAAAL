@@ -27,8 +27,13 @@ done
 rm dd_state.tmp
 echo -e "\r[${i}] DONE!     "
 i=$((i-1))
+<dd_state ${BIN_DIR}/benchmark/delta-debug --simplify -f temp-simp.json
+
 echo "*** DD STATE ***"
 cat dd_state
 
 echo "*** PDA ***"
 cat temp.json
+
+echo "*** Simplified PDA ***"
+cat temp-simp.json
