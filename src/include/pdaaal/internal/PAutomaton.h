@@ -30,6 +30,7 @@
 #include "PDA.h"
 #include "pdaaal/NFA.h"
 #include "pdaaal/AutomatonPath.h"
+#include "pdaaal/utils/vector_printer.h"
 #include <memory>
 #include <functional>
 #include <vector>
@@ -306,7 +307,11 @@ namespace pdaaal::internal {
                                     }
                                 }
                                 if (!special_weight) {
-                                    out << "(" << tw.second << ")";
+                                    if constexpr(W::is_vector) {
+                                        out << "(" << vector_printer() << tw.second << ")";
+                                    } else {
+                                        out << "(" << tw.second << ")";
+                                    }
                                 }
                             }
                             out << "\\]";
@@ -331,7 +336,11 @@ namespace pdaaal::internal {
                         if (labels.size() > 1) out << " ";
                         out << "𝜀";
                         if constexpr(is_weighted<W>) {
-                            out << "(" << labels.find(epsilon)->second.second << ")";
+                            if constexpr(W::is_vector) {
+                                out << "(" << vector_printer() << labels.find(epsilon)->second.second << ")";
+                            } else {
+                                out << "(" << labels.find(epsilon)->second.second << ")";
+                            }
                         }
                     }
                     out << "\"];\n";
@@ -652,6 +661,9 @@ namespace pdaaal::internal {
         }
         auto emplace_edge(size_t from, uint32_t label, size_t to, edge_anno_t trace = edge_anno::make_default()) {
             return _states[from]->_edges.emplace(to, label, trace);
+        }
+        auto insert_or_assign_edge(size_t from, uint32_t label, size_t to, edge_anno_t trace = edge_anno::make_default()) {
+            return _states[from]->_edges.insert_or_assign(to, label, trace);
         }
         void update_edge(size_t from, size_t to, uint32_t label, edge_annotation_t<W,TraceInfoType::Single> trace) {
             auto ptr = _states[from]->_edges.get(to, label);

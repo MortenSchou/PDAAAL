@@ -49,6 +49,38 @@ namespace pdaaal {
             saturation.run();
         }
 
+        template <Trace_Type trace_type, typename pda_t, typename automaton_t, typename W>
+        static bool post_star_fixed_point_accepts(PAutomatonProduct<pda_t,automaton_t,W,TraceInfoType::Pair>& instance) {
+            post_star_fixed_point<trace_type>(instance.automaton());
+            return instance.template initialize_product<false,false>();
+        }
+        template <Trace_Type trace_type, typename W>
+        static void post_star_fixed_point(internal::PAutomaton<W,TraceInfoType::Pair>& automaton) {
+            internal::PostStarFixedPointSaturation<W,trace_type> saturation(automaton);
+            saturation.run();
+        }
+
+        template <Trace_Type trace_type, typename pda_t, typename automaton_t, typename W>
+        static std::pair<bool,bool> interleaving_fixed_point_accepts(PAutomatonProduct<pda_t,automaton_t,W,TraceInfoType::Pair>& instance,
+                                                     PAutomatonProduct<pda_t,automaton_t,W,TraceInfoType::Pair>& instance_copy) {
+            instance_copy.enable_pre_star();
+            internal::PreStarFixedPointSaturation<W,trace_type> pre_star(instance_copy.automaton());
+            internal::PostStarFixedPointSaturation<W,trace_type> post_star(instance.automaton());
+
+            while(!pre_star.done() && !post_star.done()) {
+                post_star.step();
+                pre_star.step();
+            }
+            if (pre_star.done()) {
+                pre_star.finalize();
+                return std::make_pair(instance_copy.template initialize_product<false,false>(), true);
+            } else {
+                assert(post_star.done());
+                post_star.finalize();
+                return std::make_pair(instance.template initialize_product<false,false>(), false);
+            }
+        }
+
         template <typename pda_t, typename automaton_t, typename W>
         static bool dual_search_accepts(PAutomatonProduct<pda_t,automaton_t,W>& instance) {
             if (instance.template initialize_product<true>()) {
@@ -58,17 +90,17 @@ namespace pdaaal {
                 [&instance](size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W> trace) -> bool {
                     return instance.add_final_edge(from, label, to, trace);
                 },
-                [&instance](size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W> trace) -> bool {
+                internal::early_termination_handler<W>([&instance](size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W> trace) -> bool {
                     return instance.add_initial_edge(from, label, to, trace);
-                }
+                })
             );
         }
         template <typename W, bool ET=true>
         static bool dual_search(internal::PAutomaton<W> &pre_star_automaton, internal::PAutomaton<W> &post_star_automaton,
                                 const internal::early_termination_fn<W>& pre_star_early_termination,
-                                const internal::early_termination_fn<W>& post_star_early_termination) {
+                                internal::early_termination_handler<W>&& post_star_early_termination) {
             internal::PreStarSaturation<W,ET> pre_star(pre_star_automaton, pre_star_early_termination);
-            internal::PostStarSaturation<W,ET> post_star(post_star_automaton, post_star_early_termination);
+            internal::PostStarSaturation<W,ET> post_star(post_star_automaton, std::move(post_star_early_termination));
             if constexpr (ET) {
                 if (pre_star.found() || post_star.found()) return true;
             }
@@ -123,9 +155,10 @@ namespace pdaaal {
         static bool post_star_accepts(internal::PAutomaton<W> &automaton, size_t state, const std::vector<uint32_t> &stack) {
             if (stack.size() == 1) {
                 auto s_label = stack[0];
-                return automaton.accepts(state, stack) || post_star<trace_type,W,true>(automaton, [&automaton, state, s_label](size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W>) -> bool {
-                    return from == state && label == s_label && automaton.states()[to]->_accepting;
-                });
+                return automaton.accepts(state, stack) || post_star<trace_type,W,true>(automaton, internal::early_termination_handler<W>(
+                    [&automaton, state, s_label](size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W>) -> bool {
+                        return from == state && label == s_label && automaton.states()[to]->_accepting;
+                    }));
             } else {
                 return post_star<trace_type,W>(automaton) || automaton.accepts(state, stack);
             }
@@ -134,21 +167,26 @@ namespace pdaaal {
         template <Trace_Type trace_type = Trace_Type::Any, typename pda_t, typename automaton_t, typename W>
         static bool post_star_accepts(PAutomatonProduct<pda_t,automaton_t,W>& instance) {
             return instance.initialize_product() ||
-                   post_star<trace_type,W,true>(instance.automaton(), [&instance](size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W> trace) -> bool {
-                       return instance.template add_edge_product<trace_type != Trace_Type::Shortest>(from, label, to, trace);
-                   });
+                    post_star<trace_type,W,true>(instance.automaton(), internal::early_termination_handler<W>(
+                       [&instance](size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W> trace) -> bool {
+                           return instance.template add_edge_product<trace_type != Trace_Type::Shortest>(from, label, to, trace);
+                       },
+                       [&instance](size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W> trace) {
+                           instance.update_edge_product(from, label, to, trace);
+                       }));
         }
 
         template <Trace_Type trace_type = Trace_Type::Any, typename W, bool ET = false>
         static bool post_star(internal::PAutomaton<W> &automaton,
-                              const internal::early_termination_fn<W>& early_termination = [](size_t, uint32_t, size_t, internal::edge_annotation_t<W>) -> bool { return false; }) {
+                              internal::early_termination_handler<W> early_termination = internal::early_termination_handler<W>()) {
             static_assert(is_weighted<W> || trace_type != Trace_Type::Shortest, "Cannot do shortest-trace post* for PDA without weights."); // TODO: Consider: W=uin32_t, weight==1 as a default weight.
             if constexpr (is_weighted<W> && trace_type == Trace_Type::Shortest) {
-                return post_star_shortest<W,true,ET>(automaton, early_termination);
-            } else if constexpr (trace_type == Trace_Type::Any) {
-                return post_star_any<W,ET>(automaton, early_termination);
-            } else if constexpr (trace_type == Trace_Type::None) {
-                return post_star_any<W,ET>(automaton, early_termination); // TODO: Implement faster no-trace option.
+                internal::PostStarShortestSaturation<W,true,ET> saturation(automaton, std::move(early_termination));
+                return saturation.run();
+            } else if constexpr (trace_type == Trace_Type::Any ||
+                                 trace_type == Trace_Type::None) { // TODO: Implement faster no-trace option.
+                internal::PostStarSaturation<W,ET> saturation(automaton, std::move(early_termination));
+                return saturation.run();
             }
         }
 
@@ -170,7 +208,8 @@ namespace pdaaal {
             if constexpr (trace_type == Trace_Type::Longest || trace_type == Trace_Type::ShortestFixedPoint) {
                 using return_type = decltype(_get_trace(instance.pda(), instance.initial_automaton(), std::declval<AutomatonPath<>>()));
                 auto [automaton_path, weight] = instance.template find_path_fixed_point<trace_type>();
-                if (weight != internal::solver_weight<W,trace_type>::bottom()) { // Not infinite. Use standard _get_trace.
+                if ((trace_type == Trace_Type::ShortestFixedPoint && !W::is_signed) // For unsigned shortest-fixed-point, bottom==0 is not infinite.
+                    || weight != internal::solver_weight<W,trace_type>::bottom()) { // Not infinite. Use standard _get_trace.
                     return std::make_pair(_get_trace(instance.pda(), instance.automaton(), automaton_path), weight);
                 }
                 // Infinite trace.
@@ -240,31 +279,6 @@ namespace pdaaal {
         }
 
     private:
-        template <typename W, bool ET>
-        static bool post_star_any(internal::PAutomaton<W> &automaton, const internal::early_termination_fn<W>& early_termination) {
-            internal::PostStarSaturation<W,ET> saturation(automaton, early_termination);
-            while(!saturation.workset_empty()) {
-                if constexpr (ET) {
-                    if (saturation.found()) return true;
-                }
-                saturation.step();
-            }
-            return saturation.found();
-        }
-
-        template<typename W, bool Enable, bool ET, typename = std::enable_if_t<Enable>>
-        static bool post_star_shortest(internal::PAutomaton<W> &automaton, const internal::early_termination_fn<W>& early_termination) {
-            internal::PostStarShortestSaturation<W,Enable,ET> saturation(automaton, early_termination);
-            while(!saturation.workset_empty()) {
-                if constexpr (ET) {
-                    if (saturation.found()) break;
-                }
-                saturation.step();
-            }
-            saturation.finalize();
-            return saturation.found();
-        }
-
         template <typename T, typename W, typename S, bool ssm>
         static typename PDA<T,W,fut::type::vector,S,ssm>::tracestate_t
         _decode_edges(const PDA<T,W,fut::type::vector,S,ssm> &pda, const AutomatonPath<>& path) {
