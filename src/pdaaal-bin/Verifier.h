@@ -93,8 +93,16 @@ namespace pdaaal {
         [[nodiscard]] bool is_wali_prestar() const {
             return engine == 5;
         }
-         template <typename instance_t>
+        template <typename instance_t>
         void verify_wali(instance_t& instance, json_stream& json_out) {
+            if (trace_type == Trace_Type::Longest) {
+                verify_wali_<Trace_Type::Longest>(instance, json_out);
+            } else {
+                verify_wali_<Trace_Type::Shortest>(instance, json_out);
+            }
+        }
+        template <Trace_Type trace_type, typename instance_t>
+        void verify_wali_(instance_t& instance, json_stream& json_out) {
             if (!use_wali()) return;
 
             using pda_t = std20::remove_cvref_t<decltype(instance.pda())>;
@@ -103,7 +111,7 @@ namespace pdaaal {
                 throw std::runtime_error("Signed weight is not supported for WALi engine.");
                 return;
             } else {
-                using WALi_Weight = std::conditional_t<W::is_weight, std::conditional_t<W::is_vector, VectorUintWeight, UintWeight>, Reach>;
+                using WALi_Weight = std::conditional_t<W::is_weight, std::conditional_t<trace_type == Trace_Type::Longest,LongestUintWeight,std::conditional_t<W::is_vector, VectorUintWeight, UintWeight>>, Reach>;
                 bool pre_star = is_wali_prestar();
                 json_out.entry("engine", pre_star ? "WALi-pre*" : "WALi-post*");
                 stopwatch construction_time;
@@ -117,7 +125,14 @@ namespace pdaaal {
                         auto apply = [&pda,&r,&from,&to](const auto& pre) {
                             WPDS_Rule wpds_rule(from, pre, to);
                             if constexpr (W::is_weight) {
-                                if constexpr (W::is_vector) {
+                                if constexpr (trace_type == Trace_Type::Longest) {
+                                    if constexpr (W::is_vector) {
+                                        assert(false);
+                                        throw std::logic_error("WALi Longest trace for vector weights not implemented.");
+                                    } else {
+                                        wpds_rule._weight = new LongestUintWeight(r._weight);
+                                    }
+                                } else if constexpr (W::is_vector) {
                                     wpds_rule._weight = new VectorUintWeight(r._weight);
                                 } else {
                                     wpds_rule._weight = new UintWeight(r._weight);
@@ -169,7 +184,10 @@ namespace pdaaal {
                 json_out.entry("rtime", reachability_time.duration());
                 if (result) {
                     if constexpr (W::is_weight) {
-                        if constexpr (W::is_vector) {
+                        if constexpr (trace_type == Trace_Type::Longest) {
+                            auto w = dynamic_cast<wali::LongestSaturatingPathSemiring*>(weight.get_ptr());
+                            json_out.entry("weight", w->getNum() == (unsigned int)(-1) ? json() : json(w->getNum()));
+                        } else if constexpr (W::is_vector) {
                             json_out.entry("weight", dynamic_cast<WALi_Weight*>(weight.get_ptr())->to_json());
                         } else {
                             auto w = dynamic_cast<wali::ShortestPathSemiring*>(weight.get_ptr());

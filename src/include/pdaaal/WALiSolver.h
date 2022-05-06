@@ -31,6 +31,7 @@
 #include <wali/wpds/WPDS.hpp>
 #include <wali/Reach.hpp>
 #include <wali/regex/Regex.hpp>
+#include <wali/LongestSaturatingPathSemiring.hpp>
 #include <wali/ShortestPathSemiring.hpp>
 #include <wali/ShortestPathWorklist.hpp>
 #include <wali/wfa/State.hpp>
@@ -51,6 +52,14 @@ namespace pdaaal {
         explicit UintWeight( unsigned int b ) : ShortestPathSemiring(b) {}
         static wali::sem_elem_t One() { static wali::sem_elem_t O(wali::ShortestPathSemiring::make_one()); return O; }
         static wali::sem_elem_t Zero() { static wali::sem_elem_t Z(wali::ShortestPathSemiring::make_zero()); return Z; }
+    };
+    class LongestUintWeight : public wali::LongestSaturatingPathSemiring {
+        static constexpr unsigned int max_val = std::numeric_limits<unsigned int>::max() - 2;
+    public:
+        LongestUintWeight() : LongestSaturatingPathSemiring(max_val) {}
+        explicit LongestUintWeight( unsigned int b ) : LongestSaturatingPathSemiring(b, max_val) {}
+        static wali::sem_elem_t One() { static wali::sem_elem_t O(new LongestSaturatingPathSemiring(0, max_val)); return O; }
+        static wali::sem_elem_t Zero() { static wali::sem_elem_t Z(new LongestSaturatingPathSemiring((unsigned int)(-1), max_val)); return Z; }
     };
 
     class VectorUintWeight : public wali::SemElem {
