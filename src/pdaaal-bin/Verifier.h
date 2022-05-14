@@ -116,9 +116,9 @@ namespace pdaaal {
                 bool result;
                 json j_weight;
                 {
-                    result = Solver::post_star_fixed_point_accepts<Trace_Type::ShortestFixedPoint>(instance);
+                    result = Solver::pre_star_accepts<Trace_Type::Shortest>(instance);
                     if (result) {
-                        j_weight = Solver::get_trace<Trace_Type::ShortestFixedPoint>(instance).second;
+                        j_weight = Solver::get_trace<Trace_Type::Shortest>(instance).second;
                     }
                 }
                 return std::make_pair(result,j_weight);
