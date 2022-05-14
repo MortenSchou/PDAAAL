@@ -119,10 +119,11 @@ BOOST_AUTO_TEST_CASE(EarlyTerminationPostStar)
 
     std::vector<char> test_stack_reachable{'B', 'A', 'A', 'A'};
     auto stack_native = pda.encode_pre(test_stack_reachable);
-    auto result = Solver::post_star_accepts(automaton, 1, stack_native);
+    PAutomatonProduct instance(pda, std::move(automaton), internal::PAutomaton(pda, 1, stack_native));
+    auto result = Solver::post_star_accepts(instance);
     BOOST_CHECK_EQUAL(result, true);
 
-    auto trace = Solver::get_trace(pda, automaton, 1, test_stack_reachable);
+    auto trace = Solver::get_trace(pda, instance.automaton(), 1, test_stack_reachable);
     BOOST_CHECK_EQUAL(trace.size(), 7);
 }
 
@@ -143,8 +144,8 @@ BOOST_AUTO_TEST_CASE(EarlyTerminationPreStar)
     internal::PAutomaton automaton(pda, 1, pda.encode_pre(init_stack));
 
     std::vector<char> test_stack_reachable{'A'};
-    auto result = Solver::pre_star_accepts(automaton, 0, pda.encode_pre(test_stack_reachable));
-    BOOST_CHECK_EQUAL(result, true);
+    auto result = Solver::pre_star_accepts<Trace_Type::None>(automaton, 0, pda.encode_pre(test_stack_reachable));
+    BOOST_REQUIRE_EQUAL(result, true);
 
     auto trace = Solver::get_trace(pda, automaton, 0, test_stack_reachable);
     BOOST_CHECK_EQUAL(trace.size(), 12);
@@ -200,7 +201,7 @@ BOOST_AUTO_TEST_CASE(Pre_0AApop1A)
     std::vector<size_t> final_states{1};
     PAutomatonProduct instance(pda, initial_nfa, initial_states, final_nfa, final_states);
 
-    bool result = Solver::pre_star_accepts(instance);
+    bool result = Solver::pre_star_accepts<Trace_Type::None>(instance);
     BOOST_CHECK(result);
     auto trace = Solver::get_trace(instance);
     BOOST_CHECK_EQUAL(trace.size(), 2);
@@ -218,7 +219,7 @@ BOOST_AUTO_TEST_CASE(Pre_0Apop1)
     std::vector<size_t> final_states{1};
     PAutomatonProduct instance(pda, initial_nfa, initial_states, final_nfa, final_states);
 
-    bool result = Solver::pre_star_accepts(instance);
+    bool result = Solver::pre_star_accepts<Trace_Type::None>(instance);
     BOOST_CHECK(result);
     auto trace = Solver::get_trace(instance);
     BOOST_CHECK_EQUAL(trace.size(), 2);
@@ -237,7 +238,7 @@ BOOST_AUTO_TEST_CASE(Pre_0AApop0)
     std::vector<size_t> final_states{0};
     PAutomatonProduct instance(pda, initial_nfa, initial_states, final_nfa, final_states);
 
-    bool result = Solver::pre_star_accepts(instance);
+    bool result = Solver::pre_star_accepts<Trace_Type::None>(instance);
     BOOST_CHECK(result);
     auto trace = Solver::get_trace(instance);
     BOOST_CHECK_EQUAL(trace.size(), 3);
@@ -257,7 +258,7 @@ BOOST_AUTO_TEST_CASE(Pre_0AApop0A)
     std::vector<size_t> final_states{0};
     PAutomatonProduct instance(pda, initial_nfa, initial_states, final_nfa, final_states);
 
-    bool result = Solver::pre_star_accepts(instance);
+    bool result = Solver::pre_star_accepts<Trace_Type::None>(instance);
     BOOST_CHECK(result);
     auto trace = Solver::get_trace(instance);
     BOOST_CHECK_EQUAL(trace.size(), 3);
