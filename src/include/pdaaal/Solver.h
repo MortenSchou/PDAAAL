@@ -165,7 +165,7 @@ namespace pdaaal {
             return pre_star.found() || post_star.found();
         }
 
-        template <Trace_Type trace_type, typename W>
+        template <Trace_Type trace_type = Trace_Type::Any, typename W>
         static bool pre_star_accepts(internal::PAutomaton<W> &automaton, size_t state, const std::vector<uint32_t> &stack) {
             if (stack.size() == 1) {
                 auto s_label = stack[0];
@@ -178,7 +178,7 @@ namespace pdaaal {
             }
         }
 
-        template <Trace_Type trace_type, typename pda_t, typename automaton_t, typename W>
+        template <Trace_Type trace_type = Trace_Type::Any, typename pda_t, typename automaton_t, typename W>
         static bool pre_star_accepts(PAutomatonProduct<pda_t,automaton_t,W>& instance) {
             instance.enable_pre_star();
             return instance.initialize_product() ||
@@ -191,7 +191,7 @@ namespace pdaaal {
                    });
             }
 
-        template <Trace_Type trace_type, typename W, bool ET=false>
+        template <Trace_Type trace_type = Trace_Type::Any, typename W, bool ET=false>
         static bool pre_star(internal::PAutomaton<W> &automaton,
                              const internal::early_termination_fn2<W>& early_termination = [](size_t, uint32_t, size_t, internal::edge_annotation_t<W>, const auto&) -> bool { return false; }) {
             if(!is_weighted<W> && trace_type == Trace_Type::Shortest)
@@ -199,17 +199,11 @@ namespace pdaaal {
             internal::PreStarSaturation<W,ET,trace_type == Trace_Type::Shortest> saturation(automaton, early_termination);
             while(!saturation.workset_empty()) {
                 if constexpr (ET) {
-                    if (saturation.found())
-                    {
-                        return true;
-                    }
+                    if (saturation.found()) return true;
                 }
                 saturation.step();
             }
-            if(saturation.found())
-                return true;
-            else
-                return false;
+            return saturation.found();
         }
 
         template <Trace_Type trace_type = Trace_Type::Any, typename pda_t, typename automaton_t, typename W>
