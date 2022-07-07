@@ -27,7 +27,6 @@
 #ifndef PDAAAL_PTRIE_INTERFACE_H
 #define PDAAAL_PTRIE_INTERFACE_H
 
-#include "std20.h"
 #include <ptrie/ptrie_map.h>
 #include <boost/mp11.hpp>
 #include <vector>
@@ -153,13 +152,13 @@ namespace pdaaal::utils {
     struct byte_vector_converter<std::tuple<Args...>, std::enable_if_t<((has_byte_vector_converter_v<Args>) && ...)>> {
         using T = std::tuple<Args...>;
         static constexpr size_t size(const T& data) {
-            return std::apply([](auto&&... args){return (byte_vector_converter<std20::remove_cvref_t<decltype(args)>>::size(args) + ...);}, data);
+            return std::apply([](auto&&... args){return (byte_vector_converter<std::remove_cvref_t<decltype(args)>>::size(args) + ...);}, data);
         }
         static constexpr void push_back_bytes(std::vector<std::byte>& result, const T& data){
-            std::apply([&result](auto&&... args){(byte_vector_converter<std20::remove_cvref_t<decltype(args)>>::push_back_bytes(result, args), ...);}, data);
+            std::apply([&result](auto&&... args){(byte_vector_converter<std::remove_cvref_t<decltype(args)>>::push_back_bytes(result, args), ...);}, data);
         }
         static constexpr void from_bytes(const std::vector<std::byte>& bytes, size_t& bytes_id, T& data){
-            std::apply([&bytes, &bytes_id](auto&&... args){(byte_vector_converter<std20::remove_cvref_t<decltype(args)>>::from_bytes(bytes, bytes_id, args), ...);}, data);
+            std::apply([&bytes, &bytes_id](auto&&... args){(byte_vector_converter<std::remove_cvref_t<decltype(args)>>::from_bytes(bytes, bytes_id, args), ...);}, data);
         }
     };
     // Vector of fixed size elements. Is not itself fixed_size. It stores extra info of its size, so it only uses the bytes corresponding to it.
