@@ -113,6 +113,36 @@ namespace pdaaal {
         }
         [[nodiscard]] label_t get_symbol(size_t id) const { return _pda.get_symbol(id); }
 
+        [[nodiscard]] std::string to_dot(Trace_Type trace_type) const {
+            std::stringstream ss;
+            switch (trace_type) {
+                case Trace_Type::None:
+                    to_dot<Trace_Type::None>(ss);
+                    break;
+                case Trace_Type::Any:
+                    to_dot<Trace_Type::Any>(ss);
+                    break;
+                case Trace_Type::Shortest:
+                    to_dot<Trace_Type::Shortest>(ss);
+                    break;
+                case Trace_Type::Longest:
+                    to_dot<Trace_Type::Longest>(ss);
+                    break;
+                case Trace_Type::ShortestFixedPoint:
+                    to_dot<Trace_Type::ShortestFixedPoint>(ss);
+                    break;
+            }
+            return ss.str();
+        }
+        template<Trace_Type trace_type = Trace_Type::None>
+        void to_dot(std::ostream &out) const {
+            static_cast<const parent_t*>(this)->template to_dot<trace_type>(out,
+                [this](std::ostream& s, const uint32_t& label){ s << _pda.get_symbol(label); },
+                [this,pda_size=_pda.states().size()](std::ostream& s, const size_t& state_id){
+                    state_id < pda_size ? s << _pda.get_state(state_id) : s << state_id;
+                });
+        }
+
     private:
         const pda_t& _pda;
     };

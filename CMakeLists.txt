@@ -20,6 +20,7 @@ endif()
 
 option(PDAAAL_BuildTests "Build the unit tests of PDAAAL." ${PDAAAL_MAIN_PROJECT})
 option(PDAAAL_Build_Main "Build the stand-alone PDAAAL binary." ${PDAAAL_MAIN_PROJECT})
+option(PDAAAL_MakePythonBindings "Build python module with PDAAAL library." ${PDAAAL_MAIN_PROJECT})
 option(PDAAAL_AddressSanitizer "Enables address sanitization during compilation." OFF)
 option(PDAAAL_GetDependencies "Fetch external dependencies from web." ON)
 
@@ -72,4 +73,8 @@ if(PDAAAL_BuildTests)
         add_test(NAME Verification_test         COMMAND Verification_test)
     endif()
 
+endif()
+
+if(PDAAAL_MakePythonBindings)
+    add_subdirectory(pybind)
 endif()
