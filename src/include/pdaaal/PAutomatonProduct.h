@@ -192,7 +192,7 @@ namespace pdaaal {
 
         template <bool state_pair = false>
         std::tuple<AutomatonPath<state_pair>, typename W::type> find_path_shortest() const {
-            return _product.template get_path_shortest<state_pair>([this](auto s){ return get_original<state_pair>(s); });
+            return _product.template get_path_shortest<state_pair>([this](auto s){ return this->get_original<state_pair>(s); });
         }
 
         template<Trace_Type trace_type = Trace_Type::Any, bool state_pair = false>
