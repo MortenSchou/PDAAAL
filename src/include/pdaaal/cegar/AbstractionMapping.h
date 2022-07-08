@@ -32,6 +32,7 @@
 #include <iterator>
 #include <memory>
 #include <vector>
+#include <ranges>
 
 namespace pdaaal {
     using namespace pdaaal::utils;
@@ -117,29 +118,12 @@ namespace pdaaal {
             return result;
         }
 
-        // TODO: Determine design and relevance later...
-        // TODO: Use C++20 ranges::view when available.
-        // Return range structure with begin and end defined.
-        struct concrete_value_range {
-            explicit concrete_value_range(const ptrie_map<ConcreteType, size_t>* map, const std::vector<size_t>* range = nullptr)
-                    : _map(map), _range(range) { };
-            using iterator = decltype(ptrie_access_iterator(std::declval<const ptrie_map<ConcreteType, size_t>*>()));
-            iterator begin() const noexcept {
-                return _range != nullptr ? iterator(_range->begin(), _map) : iterator(_map);
-            }
-            iterator end() const noexcept {
-                return _range != nullptr ? iterator(_range->end(), _map) : iterator(_map);
-            }
-        private:
-            const ptrie_map<ConcreteType, size_t>* _map;
-            const std::vector<size_t>* _range;
-        };
-
-        concrete_value_range get_concrete_values_range(size_t abstract_value) const {
-            if (abstract_value < _one_to_many_ids.size()) {
-                return concrete_value_range(&_many_to_one_map, &_one_to_many_ids[abstract_value]);
-            }
-            return concrete_value_range(&_many_to_one_map);
+        auto get_concrete_values_range(size_t abstract_value) const {
+            static constexpr std::vector<size_t> empty;
+            auto map_to_concrete = std::ranges::views::transform([this](size_t index){
+                return _many_to_one_map.at(index);
+            });
+            return (abstract_value < _one_to_many_ids.size() ? _one_to_many_ids[abstract_value] : empty) | map_to_concrete;
         }
 
         [[nodiscard]] size_t size() const {
