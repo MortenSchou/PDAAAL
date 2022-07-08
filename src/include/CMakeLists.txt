@@ -16,7 +16,7 @@ target_sources(pdaaal
             pdaaal/parsing/NfaParser.cpp
     PUBLIC  ${HEADER_FILES}
 )
-target_compile_features(pdaaal PUBLIC cxx_std_17) # Require C++17 features.
+target_compile_features(pdaaal PUBLIC cxx_std_20) # Require C++20 features.
 if (MSVC)
     target_compile_options(pdaaal PRIVATE /W4)
 else()
