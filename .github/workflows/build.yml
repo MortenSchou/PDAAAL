@@ -22,24 +22,24 @@ jobs:
           - {
             name: "Ubuntu-gcc",
             os: ubuntu-22.04,
-            cxx: "g++-11",
+            cxx: "g++-13",
             generators: "Ninja",
-            boost_dir: "/lib/cmake/Boost-1.79.0/",
+            boost_dir: "/lib/cmake/Boost-1.83.0/",
             boost_platform_version: "22.04",
             boost_toolset: "gcc"
           }
           - {
             name: "Ubuntu-clang",
             os: ubuntu-22.04,
-            cxx: "clang++-14",
+            cxx: "clang++-15",
             generators: "Ninja",
-            boost_dir: "/lib/cmake/Boost-1.79.0/",
+            boost_dir: "/lib/cmake/Boost-1.83.0/",
             boost_platform_version: "22.04",
             boost_toolset: "gcc"
           }
           - {
             name: "Macos-clang",
-            os: macos-12,
+            os: macos-13,
             cxx: "clang++",
             generators: "Ninja",
             boost_dir: ""
@@ -49,7 +49,7 @@ jobs:
 #            os: windows-latest,
 #            cxx: "cl",
 #            generators: "Visual Studio 17 2022",
-#            boost_dir: "/lib/cmake/Boost-1.79.0/",
+#            boost_dir: "/lib/cmake/Boost-1.83.0/",
 #            boost_platform_version: "2022",
 #            boost_toolset: "msvc"
 #          }
@@ -86,7 +86,7 @@ jobs:
         id: install-boost
         with:
           # Set the boost version (required)
-          boost_version: 1.79.0
+          boost_version: 1.83.0
           # OPTIONAL: Specify a platform version
           platform_version: ${{ matrix.config.boost_platform_version }}
           # OPTIONAL: Specify a toolset
