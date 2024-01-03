@@ -28,15 +28,16 @@ jobs:
             boost_platform_version: "22.04",
             boost_toolset: "gcc"
           }
-          - {
-            name: "Ubuntu-clang",
-            os: ubuntu-22.04,
-            cxx: "clang++-15",
-            generators: "Ninja",
-            boost_dir: "/lib/cmake/Boost-1.83.0/",
-            boost_platform_version: "22.04",
-            boost_toolset: "gcc"
-          }
+## Wait for clang-16 to be available, as clang <=15 & libstdc++ does not work with <ranges>.
+#          - {
+#            name: "Ubuntu-clang",
+#            os: ubuntu-22.04,
+#            cxx: "clang++-15",
+#            generators: "Ninja",
+#            boost_dir: "/lib/cmake/Boost-1.83.0/",
+#            boost_platform_version: "22.04",
+#            boost_toolset: "gcc"
+#          }
           - {
             name: "Macos-clang",
             os: macos-13,
