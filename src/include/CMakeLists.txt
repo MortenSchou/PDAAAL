@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.14)
 
+cmake_policy(SET CMP0135 NEW)
+
 project(PDAAAL-lib VERSION ${PDAAAL_VERSION} LANGUAGES CXX)
 
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
@@ -38,17 +40,17 @@ if (PDAAAL_GetDependencies)
 
     # PEGTL (Parsing Expression Grammar Template Library) is a modern header-only parser combinator library.
     FetchContent_Declare(pegtl
-            URL https://github.com/taocpp/PEGTL/archive/refs/tags/3.2.5.tar.gz
-            URL_HASH SHA512=e531eaeef614d822e4bddbc6662fbe116cc1536fa308109f28ce5433607e6102f4e754a31094f9c349e4319914da6c83450dd2e8fa10dcfc3eee5a5dca547c14
-            )
+        URL https://github.com/taocpp/PEGTL/archive/refs/tags/3.2.7.tar.gz
+        URL_HASH SHA512=e996be569e1c25377b13870c4f3e59f1935bbf24bb7c6edca0edc85b304fbe3d05db52a303839b0bd50c78769b773fc2237814787a703c58de8a79398210ee34
+    )
     FetchContent_MakeAvailable(pegtl)
 
     # Abseil is a collection of fundamental libraries originally developed by Google.
     # We use their hash framework.
     FetchContent_Declare(abseil
-            URL https://github.com/abseil/abseil-cpp/archive/refs/tags/20211102.0.tar.gz
-            URL_HASH SHA512=fed68aa434c02ec6faa9d1c81f1ad35b60ec024b44957e2e0ac31e6075e385c06a3e1b616afeb4bb7c2413191fd7827d82e1f9f0796b52ed21fb2c41dd9031cf
-            ) # Abseil suggests to 'live at head', but for now we use their lts snapshots to make sure we can always recreate any specific version of pdaaal.
+        URL https://github.com/abseil/abseil-cpp/archive/refs/tags/20230802.1.tar.gz
+        URL_HASH SHA512=14390380655c41483a98487e3b012110dd8d1743fdd68d8cde7e0d7c2730312d564b15726d8c9d2fff237d2fce3983bbbb5213f59612c7c6feaeb402dff9609f
+    ) # Abseil suggests to 'live at head', but for now we use their lts snapshots to make sure we can always recreate any specific version of pdaaal.
     # We could use FetchContent_MakeAvailable(abseil), but that doesn't support EXCLUDE_FROM_ALL, which excludes the abseil targets from the default ALL make target.
     FetchContent_GetProperties(abseil)
     if(NOT abseil_POPULATED)
@@ -59,9 +61,9 @@ if (PDAAAL_GetDependencies)
     endif()
 
     FetchContent_Declare(nlohmann_json
-            URL https://github.com/nlohmann/json/releases/download/v3.10.5/json.tar.xz
-            URL_HASH SHA512=feb7dbdd1f1b6318131821f55d1411f0435262601c65eca368ccf3418750fd6348a37a3cd9d0694b31ccacfc91d02fbbecf94af52429005f8898490a5233c37d
-            )
+        URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+        URL_HASH SHA512=1aa94cdc3378a1fe0e3048ee73293e34bfa5ed9b46c6db0993e58e289ef818f7b7a472c0dc9c920114312e2e3ae1ff346ca797407ff48143744592adfd0a41ad
+    )
     FetchContent_GetProperties(nlohmann_json)
     if(NOT nlohmann_json_POPULATED)
         FetchContent_Populate(nlohmann_json)
