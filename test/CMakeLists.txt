@@ -1,4 +1,3 @@
-add_definitions (-DBOOST_TEST_DYN_LINK)
 
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN YES)
@@ -21,6 +20,7 @@ set(PDAAAL_test_sources
 if (MSVC)
     add_compile_options(/W4)
 else()
+    add_definitions (-DBOOST_TEST_DYN_LINK)
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
