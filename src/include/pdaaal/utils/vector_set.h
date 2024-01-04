@@ -37,11 +37,12 @@ namespace pdaaal::fut {
 
     template<typename Key, typename Value, typename KeyEq = std::equal_to<Key>, typename KeyLess = std::less<Key>>
     struct vector_map {
-    private:
-        static constexpr KeyEq eq{};
-        static constexpr KeyLess less{};
     public:
         struct elem_t {
+        private:
+            static constexpr KeyEq eq{};
+            static constexpr KeyLess less{};
+        public:
             elem_t() = default;
             template <typename... Args>
             explicit elem_t(const Key& key, Args&&... args) : first(key), second(std::forward<Args>(args)...) {}
