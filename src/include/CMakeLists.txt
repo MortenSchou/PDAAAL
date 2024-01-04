@@ -33,8 +33,10 @@ target_include_directories(pdaaal PUBLIC
 if (PDAAAL_GetDependencies)
     include(FetchContent)
     FetchContent_Declare(ptrie
-        GIT_REPOSITORY https://github.com/petergjoel/ptrie.git
-        GIT_TAG 9132d723cf19fad5a402f4b19a194c6aa66325fb
+        # GIT_REPOSITORY https://github.com/petergjoel/ptrie.git
+        # GIT_TAG 9132d723cf19fad5a402f4b19a194c6aa66325fb
+        GIT_REPOSITORY https://github.com/MortenSchou/ptrie.git
+        GIT_TAG c91435dc182a500eff2453783334e1df5728ff04
     )
     FetchContent_MakeAvailable(ptrie)
 
