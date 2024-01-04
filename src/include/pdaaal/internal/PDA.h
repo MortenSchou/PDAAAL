@@ -30,6 +30,7 @@
 
 #include "pdaaal/Weight.h"
 #include "pdaaal/utils/fut_set.h"
+#include "pdaaal/utils/pack.h"
 
 #include <cinttypes>
 #include <vector>
@@ -39,13 +40,6 @@
 #include <functional>
 #include <type_traits>
 
-#ifdef __GNUC__
-#define PACK(...) __VA_ARGS__ __attribute__((__packed__))
-#elif defined(_MSC_VER)
-#define PACK(...) __pragma( pack(push, 1) ) __VA_ARGS__ __pragma( pack(pop))
-#else
-#define PACK(...) __VA_ARGS__
-#endif
 
 namespace pdaaal {
     enum op_t {
