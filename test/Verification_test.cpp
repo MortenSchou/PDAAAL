@@ -1,14 +1,14 @@
-/* 
+/*
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -17,7 +17,7 @@
  *  Copyright Morten K. Schou
  */
 
-/* 
+/*
  * File:   Verification_test
  * Author: Morten K. Schou <morten@h-schou.dk>
  *
@@ -26,9 +26,9 @@
 
 #define BOOST_TEST_MODULE Verification_test
 
+#include <parsing/PAutomatonJsonParser.h>
 #include <parsing/PAutomatonParser.h>
 #include <parsing/PdaJsonParser.h>
-#include <pdaaal/SolverInstance.h>
 #include <pdaaal/Solver.h>
 #include <boost/test/unit_test.hpp>
 
@@ -120,22 +120,62 @@ BOOST_AUTO_TEST_CASE(Verification_Test_1)
         }
       }
     })");
-    auto pda = PdaJsonParser::parse<weight<uint32_t>,true>(pda_stream, std::cerr);
-    auto initial_p_automaton = PAutomatonParser::parse_string("< [Zero, One] , ([A]?[B])* >", pda);
-    auto final_p_automaton = PAutomatonParser::parse_string("< [Two] , [B] [B] [B] >", pda);
-    PAutomatonProduct instance(pda, std::move(initial_p_automaton), std::move(final_p_automaton));
+    {
+        auto pda = PdaJsonParser::parse<weight<uint32_t>,true>(pda_stream, std::cerr);
+        auto initial_p_automaton = PAutomatonParser::parse_string("< [Zero, One] , ([A]?[B])* >", pda);
+        auto final_p_automaton = PAutomatonParser::parse_string("< [Two] , [B] [B] [B] >", pda);
+        PAutomatonProduct instance(pda, std::move(initial_p_automaton), std::move(final_p_automaton));
 
-    bool result = Solver::post_star_accepts<Trace_Type::Shortest>(instance);
+        bool result = Solver::post_star_accepts<Trace_Type::Shortest>(instance);
 
-    BOOST_TEST(result);
+        BOOST_TEST(result);
 
-    auto [trace, weight] = Solver::get_trace<Trace_Type::Shortest>(instance);
+        auto [trace, weight] = Solver::get_trace<Trace_Type::Shortest>(instance);
 
-    BOOST_CHECK_EQUAL(weight, 1);
-    BOOST_CHECK_EQUAL(trace.size(), 2);
+        BOOST_CHECK_EQUAL(weight, 1);
+        BOOST_CHECK_EQUAL(trace.size(), 2);
 
-    std::cout << "Weight: " << weight << std::endl;
-    print_trace(trace, pda);
+        std::cout << "Weight: " << weight << std::endl;
+        print_trace(trace, pda);
+    }
+    pda_stream.seekg(0);
+    {
+        auto pda = PdaJsonParser::parse<weight<uint32_t>,true>(pda_stream, std::cerr);
+        auto initial_p_automaton = PAutomatonParser::parse_string("< [Zero, One] , ([A]?[B])* >", pda);
+        auto final_p_automaton = PAutomatonParser::parse_string("< [Two] , [B] [B] [B] >", pda);
+        PAutomatonProduct instance(pda, std::move(initial_p_automaton), std::move(final_p_automaton));
+
+        bool result = Solver::pre_star_accepts<Trace_Type::Shortest>(instance);
+
+        BOOST_TEST(result);
+
+        auto [trace, weight] = Solver::get_trace<Trace_Type::Shortest>(instance);
+
+        BOOST_CHECK_EQUAL(weight, 1);
+        BOOST_CHECK_EQUAL(trace.size(), 2);
+
+        std::cout << "Weight: " << weight << std::endl;
+        print_trace(trace, pda);
+    }
+    pda_stream.seekg(0);
+    {
+        auto pda = PdaJsonParser::parse<weight<uint32_t>,true>(pda_stream, std::cerr);
+        auto initial_p_automaton = PAutomatonParser::parse_string("< [Zero, One] , ([A]?[B])* >", pda);
+        auto final_p_automaton = PAutomatonParser::parse_string("< [Two] , [B] [B] [B] >", pda);
+        PAutomatonProduct instance(pda, std::move(initial_p_automaton), std::move(final_p_automaton));
+
+        bool result = Solver::dual_search_accepts<Trace_Type::Shortest>(instance);
+
+        BOOST_TEST(result);
+
+        auto [trace, weight] = Solver::get_trace_dual_search<Trace_Type::Shortest>(instance);
+
+        BOOST_CHECK_EQUAL(weight, 1);
+        BOOST_CHECK_EQUAL(trace.size(), 2);
+
+        std::cout << "Weight: " << weight << std::endl;
+        print_trace(trace, pda);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(Verification_negative_weight_test)
@@ -866,4 +906,69 @@ BOOST_AUTO_TEST_CASE(Verification_longest_trace_start_hill_end_test)
     BOOST_CHECK_EQUAL(w, weight);
 
     BOOST_TEST_MESSAGE(s.str());
+}
+
+BOOST_AUTO_TEST_CASE(Verification_shortest_trace_test)
+{
+    std::istringstream pda_stream(R"({
+      "pda": {
+        "states": [
+          {"A": {"push": "B", "to": 2, "weight": 0}},
+          {"A": {"push": "A", "to": 2, "weight": 1}},
+          {"A": {"push": "B", "to": 0, "weight": 0},
+           "B": {"push": "B", "to": 0, "weight": 0}}
+        ]
+      }
+    })");
+    std::istringstream initial_stream(R"({
+      "P-automaton": {
+        "initial": [0,1,2],
+        "accepting": [3],
+        "edges": [[0,"A",3], [1,"A",3]]
+      }
+    })");
+    std::istringstream final_stream(R"({
+      "P-automaton": {
+        "initial": [0,1,2],
+        "accepting": [3],
+        "edges": [[0,"B",3], [3,"A",3], [3,"B",3]]
+      }
+    })");
+    {
+        auto pda = PdaJsonParser::parse<weight<uint32_t>,false>(pda_stream, std::cerr);
+        auto p_automaton_i = PAutomatonJsonParser::parse(initial_stream, pda);
+        auto p_automaton_f = PAutomatonJsonParser::parse(final_stream, pda);
+        PAutomatonProduct instance(pda, std::move(p_automaton_i), std::move(p_automaton_f));
+        bool result = Solver::post_star_accepts<Trace_Type::Shortest>(instance);
+        BOOST_TEST(result);
+        auto [path,weight] = instance.template find_path<Trace_Type::Shortest>();
+        BOOST_CHECK_EQUAL(weight, 0);
+
+        std::stringstream s;
+        print_automaton<Trace_Type::Shortest>(instance.product_automaton(), pda, s);
+        s << std::endl;
+        print_automaton<Trace_Type::Shortest>(instance.automaton(), pda, s);
+        s << std::endl;
+        BOOST_TEST_MESSAGE(s.str());
+    }
+    initial_stream.seekg(0);
+    final_stream.seekg(0);
+    pda_stream.seekg(0);
+    {
+        auto pda = PdaJsonParser::parse<weight<uint32_t>,false>(pda_stream, std::cerr);
+        auto p_automaton_i = PAutomatonJsonParser::parse(initial_stream, pda);
+        auto p_automaton_f = PAutomatonJsonParser::parse(final_stream, pda);
+        PAutomatonProduct instance(pda, std::move(p_automaton_i), std::move(p_automaton_f));
+        bool result = Solver::pre_star_accepts<Trace_Type::Shortest>(instance);
+        BOOST_TEST(result);
+        auto [path,weight] = instance.template find_path<Trace_Type::Shortest>();
+        BOOST_CHECK_EQUAL(weight, 0);
+
+        std::stringstream s;
+        print_automaton<Trace_Type::Shortest>(instance.product_automaton(), pda, s);
+        s << std::endl;
+        print_automaton<Trace_Type::Shortest>(instance.automaton(), pda, s);
+        s << std::endl;
+        BOOST_TEST_MESSAGE(s.str());
+    }
 }

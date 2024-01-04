@@ -142,20 +142,12 @@ namespace pdaaal::parsing {
         }
 
         size_t number_state(number_unsigned_t state) {
-            if constexpr(std::is_same_v<pda_state_t,size_t>) {
-                auto [exists, id] = automaton.exists_state(state);
-                if (exists) return id;
-                if constexpr(!skip_state_mapping) {
-                    id = automaton.add_state(false, false); // accepting is set later.
-#ifndef NDEBUG
-                    auto id2 =
-#endif
-                            automaton.insert_state(state);
-                    assert(id == id2);
-                    return id;
-                }
-            }
             if constexpr(skip_state_mapping || !std::is_same_v<pda_state_t,std::size_t>){
+                if constexpr(std::is_same_v<pda_state_t,std::size_t>) {
+                    if (state < pda.states().size()) { // Initial states (i.e. in pda) without state mapping need no further action
+                        return state;
+                    }
+                }
                 // This is a non-initial state, without a name that is recorded, so we use an auxiliary mapping.
                 auto it = extra_state_map.find(state);
                 if (it != extra_state_map.end()) {
@@ -163,6 +155,16 @@ namespace pdaaal::parsing {
                 }
                 auto id = automaton.add_state(false, false); // accepting is set later.
                 extra_state_map.emplace(state,id);
+                return id;
+            } else { // pda_state_t==size_t and !skip_state_mapping
+                auto [exists, id] = automaton.exists_state(state);
+                if (exists) return id;
+                id = automaton.add_state(false, false); // accepting is set later.
+#ifndef NDEBUG
+                auto id2 =
+#endif
+                        automaton.insert_state(state);
+                assert(id == id2);
                 return id;
             }
         }
@@ -411,106 +413,6 @@ namespace pdaaal::parsing {
                 throw std::runtime_error(error_stream.str());
             }
             return automaton_sax.get_automaton();
-        }
-    };
-
-    class PAutomatonJsonParser_Old {
-        public:
-        template <TraceInfoType trace_info_type = TraceInfoType::Single, typename pda_t>
-        static auto parse(const std::string& file, pda_t& pda, const std::string& name = "P-automaton") {
-            std::ifstream file_stream(file);
-            if (!file_stream.is_open()) {
-                std::stringstream error;
-                error << "Could not open " << name << " file: " << file << std::endl;
-                throw std::runtime_error(error.str());
-            }
-            return parse<trace_info_type>(file_stream, pda, name);
-        }
-        template <TraceInfoType trace_info_type = TraceInfoType::Single, typename pda_t>
-        static auto parse(std::istream& istream, pda_t& pda, const std::string& name = "P-automaton") {
-            json j;
-            istream >> j;
-            return from_json<trace_info_type>(j[name], pda);
-        }
-        template <TraceInfoType trace_info_type, typename W>
-        static auto from_json(const json& j, PDA<std::string,W,fut::type::vector, std::string>& pda) {
-            return from_json<trace_info_type, std::string>(j, pda, [](const std::string& s) { return s; });
-        }
-        template <TraceInfoType trace_info_type, typename W, bool ssm>
-        static auto from_json(const json& j, PDA<std::string,W,fut::type::vector, size_t, ssm>& pda) {
-            return from_json<trace_info_type, size_t>(j, pda, [](const std::string& s) -> size_t { return std::stoul(s); });
-        }
-        private:
-        template <TraceInfoType trace_info_type, typename state_t, typename W, bool skip_state_mapping>
-        static auto from_json(const json& j,
-                              PDA<std::string,W,fut::type::vector,state_t,skip_state_mapping>& pda,
-                              const std::function<state_t(const std::string&)>& state_mapping) {
-            // TODO: Proper error checking and handling.!
-            auto iterate_states = [&j,&state_mapping](const std::function<void(const state_t&,const json&)>& fn) {
-                if constexpr (skip_state_mapping) {
-                    assert(j["states"].is_array());
-                    size_t i = 0;
-                    for (const auto& j_state : j["states"]) {
-                        fn(i, j_state);
-                        ++i;
-                    }
-                } else {
-                    assert(j["states"].is_object());
-                    for (const auto& [name,j_state] : j["states"].items()) {
-                        fn(state_mapping(name), j_state);
-                    }
-                }
-            };
-            std::vector<size_t> accepting_initial_states;
-            std20::unordered_set<state_t> accepting_extra_states;
-            iterate_states([&pda,&accepting_initial_states,&accepting_extra_states](const state_t& state, const json& j_state){
-                auto [exists, id] = pda.exists_state(state);
-                if (exists) {
-                    if (j_state.contains("accepting") && j_state["accepting"].get<bool>()) {
-                        accepting_initial_states.emplace_back(id);
-                    }
-                    assert(j_state.contains("initial") && j_state["initial"].get<bool>());
-                } else {
-                    if (j_state.contains("accepting") && j_state["accepting"].get<bool>()) {
-                        accepting_extra_states.emplace(state);
-                    }
-                    assert(!(j_state.contains("initial") && j_state["initial"].get<bool>()));
-                }
-            });
-            std::sort(accepting_initial_states.begin(), accepting_initial_states.end());
-            accepting_initial_states.erase(std::unique(accepting_initial_states.begin(), accepting_initial_states.end()), accepting_initial_states.end());
-            PAutomaton<std::string, W, state_t, skip_state_mapping, trace_info_type> automaton(pda, accepting_initial_states, true);
-
-            auto state_to_id = [&automaton,&accepting_extra_states](const state_t& state){
-                auto [exists, id] = automaton.exists_state(state);
-                if (!exists) {
-                    id = automaton.add_state(false, accepting_extra_states.contains(state));
-                    auto id2 = automaton.insert_state(state);
-                    assert(id == id2);
-                }
-                return id;
-            };
-
-            iterate_states([&state_to_id,&automaton,&state_mapping,&pda](const state_t& state, const json& j_state){
-                size_t from = state_to_id(state);
-                for (const auto& edge : j_state["edges"]) {
-                    size_t to;
-                    if constexpr (skip_state_mapping) {
-                        assert(edge["to"].is_number_unsigned());
-                        to = state_to_id(edge["to"].get<size_t>());
-                    } else {
-                        assert(edge["to"].is_string());
-                        to = state_to_id(state_mapping(edge["to"].get<std::string>()));
-                    }
-                    auto label_string = edge["label"].get<std::string>();
-                    if (label_string.empty()) {
-                        automaton.add_epsilon_edge(from,to);
-                    } else {
-                        automaton.add_edge(from,to,pda.insert_label(label_string));
-                    }
-                }
-            });
-            return automaton;
         }
     };
 }

@@ -27,7 +27,6 @@
 #ifndef PDAAAL_PTRIE_INTERFACE_H
 #define PDAAAL_PTRIE_INTERFACE_H
 
-#include "std20.h"
 #include <ptrie/ptrie_map.h>
 #include <boost/mp11.hpp>
 #include <vector>
@@ -153,13 +152,13 @@ namespace pdaaal::utils {
     struct byte_vector_converter<std::tuple<Args...>, std::enable_if_t<((has_byte_vector_converter_v<Args>) && ...)>> {
         using T = std::tuple<Args...>;
         static constexpr size_t size(const T& data) {
-            return std::apply([](auto&&... args){return (byte_vector_converter<std20::remove_cvref_t<decltype(args)>>::size(args) + ...);}, data);
+            return std::apply([](auto&&... args){return (byte_vector_converter<std::remove_cvref_t<decltype(args)>>::size(args) + ...);}, data);
         }
         static constexpr void push_back_bytes(std::vector<std::byte>& result, const T& data){
-            std::apply([&result](auto&&... args){(byte_vector_converter<std20::remove_cvref_t<decltype(args)>>::push_back_bytes(result, args), ...);}, data);
+            std::apply([&result](auto&&... args){(byte_vector_converter<std::remove_cvref_t<decltype(args)>>::push_back_bytes(result, args), ...);}, data);
         }
         static constexpr void from_bytes(const std::vector<std::byte>& bytes, size_t& bytes_id, T& data){
-            std::apply([&bytes, &bytes_id](auto&&... args){(byte_vector_converter<std20::remove_cvref_t<decltype(args)>>::from_bytes(bytes, bytes_id, args), ...);}, data);
+            std::apply([&bytes, &bytes_id](auto&&... args){(byte_vector_converter<std::remove_cvref_t<decltype(args)>>::from_bytes(bytes, bytes_id, args), ...);}, data);
         }
     };
     // Vector of fixed size elements. Is not itself fixed_size. It stores extra info of its size, so it only uses the bytes corresponding to it.
@@ -317,125 +316,6 @@ namespace pdaaal::utils {
             return pt::operator[](ptrie_interface<KEY>::to_ptrie(key));
         }
     };
-
-
-    // TODO: Use C++20 ranges::transform_view when available
-    // Iterator used to iterate through the values stored in the ptrie at indexes specified by some inner iterator.
-    // It is maybe a bit overkill to define an (almost) complete random access iterator, but here goes.
-    template<typename PT, typename _inner_iterator = std::vector<size_t>::const_iterator>
-    struct ptrie_access_iterator {
-    private:
-        static_assert(std::is_same_v<std::remove_const_t<typename _inner_iterator::value_type>, size_t>,
-                      "_inner_iterator::value_type is not size_t");
-        using _iterator_type = std::iterator<std::random_access_iterator_tag, typename PT::elem_type>;
-        _inner_iterator _inner;
-        const PT* _ptrie;
-    public:
-        using iterator_category = typename _iterator_type::iterator_category;
-        using value_type = typename _iterator_type::value_type;
-        static_assert(std::is_same_v<value_type, typename PT::elem_type>, "value_type and PT::elem_type not matching");
-        using difference_type = typename _iterator_type::difference_type;
-        // pointer and reference are not used, as we have to return by value what is stored in the ptrie_set.
-        //using pointer           = typename _iterator_type::pointer;
-        //using reference         = typename _iterator_type::reference;
-
-        explicit constexpr ptrie_access_iterator(const PT* ptrie) noexcept: _inner(
-                _inner_iterator()), _ptrie(ptrie) {};
-
-        ptrie_access_iterator(_inner_iterator&& i, const PT* ptrie) noexcept: _inner(std::move(i)), _ptrie(ptrie) {};
-
-        ptrie_access_iterator(const _inner_iterator& i, const PT* ptrie) noexcept: _inner(i), _ptrie(ptrie) {};
-
-
-        value_type operator*() const { // Note this gives a value_type not a reference.
-            return _ptrie->at(*_inner);
-        }
-
-        // Forward iterator requirements
-        ptrie_access_iterator& operator++() noexcept {
-            ++_inner;
-            return *this;
-        }
-
-        ptrie_access_iterator operator++(int) noexcept { return ptrie_access_iterator(_inner++, _ptrie); }
-
-        bool operator==(const ptrie_access_iterator& rhs) const noexcept {
-            return base() == rhs.base();
-        }
-        bool operator!=(const ptrie_access_iterator& rhs) const noexcept {
-            return base() != rhs.base();
-        }
-
-        // Bidirectional iterator requirements
-        ptrie_access_iterator& operator--() noexcept {
-            --_inner;
-            return *this;
-        }
-
-        ptrie_access_iterator operator--(int) noexcept { return ptrie_access_iterator(_inner--, _ptrie); }
-
-        // Random access iterator requirements
-        value_type operator[](difference_type n) const { // Note this gives a value_type not a reference.
-            return _ptrie->at(_inner[n]);
-        }
-
-        ptrie_access_iterator& operator+=(difference_type n) noexcept {
-            _inner += n;
-            return *this;
-        }
-
-        ptrie_access_iterator operator+(difference_type n) const noexcept {
-            return ptrie_access_iterator(_inner + n, _ptrie);
-        }
-
-        ptrie_access_iterator& operator-=(difference_type n) noexcept {
-            _inner -= n;
-            return *this;
-        }
-
-        ptrie_access_iterator operator-(difference_type n) const noexcept {
-            return ptrie_access_iterator(_inner - n, _ptrie);
-        }
-
-        difference_type operator-(const ptrie_access_iterator& rhs) const noexcept {
-            return base() - rhs.base();
-        }
-
-        bool operator<(const ptrie_access_iterator& rhs) const noexcept { return base() < rhs.base(); }
-
-        bool operator>(const ptrie_access_iterator& rhs) const noexcept { return base() > rhs.base(); }
-
-        bool operator<=(const ptrie_access_iterator& rhs) const noexcept {
-            return base() <= rhs.base();
-        }
-
-        bool operator>=(const ptrie_access_iterator& rhs) const noexcept {
-            return base() >= rhs.base();
-        }
-
-        const _inner_iterator& base() const noexcept { return _inner; }
-
-        const PT* ptrie() const noexcept { return _ptrie; }
-    };
-    template<typename T>
-    ptrie_access_iterator(const ptrie_set<T>* ptrie) -> ptrie_access_iterator<ptrie_set<T>>;
-    template<typename T, typename _inner_iterator>
-    ptrie_access_iterator(_inner_iterator&& i, const ptrie_set<T>* ptrie) -> ptrie_access_iterator<ptrie_set<T>,_inner_iterator>;
-    template<typename T, typename _inner_iterator>
-    ptrie_access_iterator(const _inner_iterator& i, const ptrie_set<T>* ptrie) -> ptrie_access_iterator<ptrie_set<T>,_inner_iterator>;
-    template<typename T, typename U>
-    ptrie_access_iterator(const ptrie_map<T,U>* ptrie) -> ptrie_access_iterator<ptrie_map<T,U>>;
-    template<typename T, typename U, typename _inner_iterator>
-    ptrie_access_iterator(_inner_iterator&& i, const ptrie_map<T,U>* ptrie) -> ptrie_access_iterator<ptrie_map<T,U>,_inner_iterator>;
-    template<typename T, typename U, typename _inner_iterator>
-    ptrie_access_iterator(const _inner_iterator& i, const ptrie_map<T,U>* ptrie) -> ptrie_access_iterator<ptrie_map<T,U>,_inner_iterator>;
-
-    template<typename PT, typename _iterator>
-    inline ptrie_access_iterator<PT, _iterator>
-    operator+(typename ptrie_access_iterator<PT, _iterator>::difference_type n,
-              const ptrie_access_iterator<PT, _iterator>& i) noexcept {
-        return ptrie_access_iterator<PT, _iterator>(i.base() + n, i.ptrie());
-    }
 
 }
 

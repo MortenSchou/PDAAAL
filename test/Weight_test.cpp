@@ -82,3 +82,17 @@ BOOST_AUTO_TEST_CASE(WeightFunctionCombinators) {
     std::vector<long int> expected{5-3, 5*1, (5-3)*2+5*1*4};
     BOOST_CHECK_EQUAL_COLLECTIONS(result.begin(), result.end(), expected.begin(), expected.end());
 }
+
+BOOST_AUTO_TEST_CASE(VectorZeroWeight) {
+    std::vector<int> a{0};
+    std::vector<int> b;
+    using W = min_weight<std::vector<int>>;
+    BOOST_CHECK_EQUAL(W::less(a,b), false);
+    BOOST_CHECK_EQUAL(W::less(b,a), false);
+    auto result_1 = W::add(a,b);
+    auto expected_1 = a;
+    BOOST_CHECK_EQUAL_COLLECTIONS(result_1.begin(), result_1.end(), expected_1.begin(), expected_1.end());
+    auto result_2 = W::add(b,a);
+    auto expected_2 = a;
+    BOOST_CHECK_EQUAL_COLLECTIONS(result_2.begin(), result_2.end(), expected_2.begin(), expected_2.end());
+}

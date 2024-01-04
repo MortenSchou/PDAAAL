@@ -1,14 +1,14 @@
-/* 
+/*
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -17,7 +17,7 @@
  *  Copyright Morten K. Schou
  */
 
-/* 
+/*
  * File:   PAutomaton.h
  * Author: Morten K. Schou <morten@h-schou.dk>
  *
@@ -52,7 +52,7 @@ namespace pdaaal {
         // Construct a PAutomaton that accepts a configuration <p,w> iff states contains p and nfa accepts w.
         PAutomaton(const pda_t& pda, const NFA<label_t>& nfa, const std::vector<size_t>& states)
         : parent_t(static_cast<const internal_pda_t&>(pda), states, nfa.empty_accept()), _pda(pda) {
-            this->template construct<label_t>(nfa, states, [&pda](const auto& v){ return pda.encode_pre(v); });
+            this->template construct<label_t>(nfa, states, [&pda](const auto& e){ return pda.encode_pre(e._symbols); });
         }
         // Same, but where the NFA contains the symbols mapped to ids already.
         PAutomaton(const pda_t& pda, const NFA<uint32_t>& nfa, const std::vector<size_t>& states)

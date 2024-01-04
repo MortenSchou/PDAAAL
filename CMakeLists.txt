@@ -8,7 +8,7 @@ if (NOT CMAKE_BUILD_TYPE)
 endif (NOT CMAKE_BUILD_TYPE)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(PDAAAL_VERSION 1.0.0)
+set(PDAAAL_VERSION 1.1.0)
 project(pdaaal VERSION ${PDAAAL_VERSION} LANGUAGES CXX)
 
 # MAIN_PROJECT CHECK
@@ -23,13 +23,25 @@ option(PDAAAL_Build_Main "Build the stand-alone PDAAAL binary." ${PDAAAL_MAIN_PR
 option(PDAAAL_AddressSanitizer "Enables address sanitization during compilation." OFF)
 option(PDAAAL_GetDependencies "Fetch external dependencies from web." ON)
 
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lstdc++")
+option(PDAAAL_BuildBundle "Includes all but system libraries within the binary." OFF)
+if (PDAAAL_BuildBundle)
+    set(BUILD_SHARED_LIBS OFF)
+    set(Boost_USE_STATIC_LIBS ON)
+    set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++")
+endif (PDAAAL_BuildBundle)
+option(PDAAAL_BuildStatic "Includes all (incl. system libraries) within the binary." OFF)
+if (PDAAAL_BuildStatic)
+    set(BUILD_SHARED_LIBS OFF)
+    set(Boost_USE_STATIC_LIBS ON)
+    set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++")
+    set(CMAKE_EXE_LINKER_FLAGS "-static")
+endif (PDAAAL_BuildStatic)
 
 if(PDAAAL_AddressSanitizer)
     add_compile_options(-fno-omit-frame-pointer -fsanitize=address)
 endif(PDAAAL_AddressSanitizer)
 
-find_package(Boost 1.70 CONFIG REQUIRED COMPONENTS headers program_options unit_test_framework)
+find_package(Boost 1.70 REQUIRED COMPONENTS program_options unit_test_framework)
 
 #actual library
 add_subdirectory(src)
