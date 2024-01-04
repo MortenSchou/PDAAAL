@@ -844,7 +844,7 @@ namespace pdaaal::internal {
             using nfastate_t = typename NFA<T>::state_t;
             std::unordered_map<const nfastate_t*, size_t> nfastate_to_id;
             std::vector<std::pair<const nfastate_t*,size_t>> waiting;
-            auto get_nfastate_id = [this, &waiting, &nfastate_to_id,&new_state_action](const nfastate_t* n) -> size_t {
+            auto get_nfastate_id = [this, &waiting, &nfastate_to_id, &new_state_action](const nfastate_t* n) -> size_t {
                 // Adds nfastate if not yet seen.
                 size_t n_id;
                 auto it = nfastate_to_id.find(n);
@@ -856,6 +856,8 @@ namespace pdaaal::internal {
                     waiting.emplace_back(n, n_id);
                     if constexpr(use_new_state_action) {
                         new_state_action(n,n_id); // Allows subclasses to do something for each new state. Defaults to no action.
+                    } else {
+                        static_cast<void>(new_state_action);
                     }
                 }
                 return n_id;

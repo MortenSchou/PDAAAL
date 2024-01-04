@@ -360,7 +360,7 @@ namespace pdaaal {
             question_extend();
         }
 
-        void and_extend(NFA&& other) {
+        void and_extend(NFA&&) {
             // prune? Powerset?
             throw std::logic_error("conjunction for NFAs are not yet implemented");
         }

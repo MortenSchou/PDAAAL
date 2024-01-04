@@ -89,7 +89,7 @@ namespace pdaaal {
 
         template <TraceInfoType trace_info_type = TraceInfoType::Single, typename instance_t>
         void verify(instance_t& instance, json_stream& json_out) {
-            using pda_t = std20::remove_cvref_t<decltype(instance.pda())>;
+            using pda_t = std::remove_cvref_t<decltype(instance.pda())>;
 
             if (engine == 0) return; // No verification if not specified.
             std::array<std::string,4> engines{"", "post*", "pre*", "dual*"};

@@ -32,27 +32,7 @@
 
 using namespace pdaaal;
 
-BOOST_AUTO_TEST_CASE(PAutomatonFromJson_OldFormat_Test)
-{
-    std::unordered_set<std::string> labels{"A"};
-    PDA<std::string> pda(labels);
-    pda.add_rule(0, 0, POP, "*", "A");
-    std::istringstream automaton_stream(R"({"P-automaton":{
-        "states":[
-            {"edges":[{"label":"A","to":1}],"initial":true},
-            {"edges":[{"label":"A","to":2}]},
-            {"accepting":true,"edges":[]}
-        ]
-    }})");
-    auto automaton = parsing::PAutomatonJsonParser_Old::parse<>(automaton_stream, pda);
-    BOOST_CHECK_EQUAL(automaton.states().size(), 3);
-    std::vector<uint32_t> stack; stack.emplace_back(0);
-    PAutomatonProduct instance(pda, std::move(automaton), internal::PAutomaton(pda, 0, stack));
-    bool result = Solver::post_star_accepts(instance);
-    BOOST_CHECK(result);
-}
-
-BOOST_AUTO_TEST_CASE(PAutomatonFromJson_NewFormat_Test)
+BOOST_AUTO_TEST_CASE(PAutomatonFromJson_Test)
 {
     std::unordered_set<std::string> labels{"A"};
     PDA<std::string> pda(labels);

@@ -178,7 +178,7 @@ namespace pdaaal {
                     auto l1 = lhs.end(), l2 = rhs.end();
                     bool exhaust1 = (f1 == l1);
                     bool exhaust2 = (f2 == l2);
-                    for (; !exhaust1 || !exhaust2; exhaust1 = (++f1 == l1), exhaust2 = (++f2 == l2)) {
+                    for (; !exhaust1 || !exhaust2; exhaust1 = exhaust1 || (++f1 == l1), exhaust2 = exhaust2 || (++f2 == l2)) {
                         auto v1 = exhaust1 ? weight<Inner>::zero() : *f1; // Missing elements are implicitly zero.
                         auto v2 = exhaust2 ? weight<Inner>::zero() : *f2;
                         if (weight_impl<Inner, maximize>::less(v1, v2)) return true;

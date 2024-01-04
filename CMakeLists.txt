@@ -37,8 +37,6 @@ if (PDAAAL_BuildStatic)
     set(CMAKE_EXE_LINKER_FLAGS "-static")
 endif (PDAAAL_BuildStatic)
 
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lstdc++")
-
 if(PDAAAL_AddressSanitizer)
     add_compile_options(-fno-omit-frame-pointer -fsanitize=address)
 endif(PDAAAL_AddressSanitizer)
