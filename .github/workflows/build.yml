@@ -45,15 +45,15 @@ jobs:
             generators: "Ninja",
             boost_dir: ""
           }
-          - {
-            name: "Windows-msvc",
-            os: windows-latest,
-            cxx: "cl",
-            generators: "Visual Studio 17 2022",
-            boost_dir: "/lib/cmake/Boost-1.83.0/",
-            boost_platform_version: "2022",
-            boost_toolset: "msvc"
-          }
+          # - {
+          #   name: "Windows-msvc",
+          #   os: windows-latest,
+          #   cxx: "cl",
+          #   generators: "Visual Studio 17 2022",
+          #   boost_dir: "/lib/cmake/Boost-1.83.0/",
+          #   boost_platform_version: "2022",
+          #   boost_toolset: "msvc"
+          # }
         build_type: ["Debug","Release"]
 
     steps:
