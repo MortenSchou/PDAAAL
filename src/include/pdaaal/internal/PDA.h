@@ -30,6 +30,7 @@
 
 #include "pdaaal/Weight.h"
 #include "pdaaal/utils/fut_set.h"
+#include "pdaaal/utils/pack.h"
 
 #include <cinttypes>
 #include <vector>
@@ -38,6 +39,7 @@
 #include <algorithm>
 #include <functional>
 #include <type_traits>
+
 
 namespace pdaaal {
     enum op_t {
@@ -146,7 +148,7 @@ namespace pdaaal::internal {
 namespace pdaaal {
     template<typename W, typename = void>
     struct user_rule_t;
-    template<typename W>
+    PACK(template<typename W>
     struct user_rule_t<W, std::enable_if_t<!is_weighted<W>>> {
         size_t _from = std::numeric_limits<size_t>::max();
         size_t _to = std::numeric_limits<size_t>::max();
@@ -175,7 +177,7 @@ namespace pdaaal {
         internal::pda_rule_t<W> to_impl_rule() const {
             return internal::pda_rule_t<W>{_to, _op, _op_label};
         }
-    } __attribute__((packed)); // packed is used to make this work fast with ptries
+    }); // packed is used to make this work fast with ptries
     template<typename W>
     struct user_rule_t<W, std::enable_if_t<is_weighted<W>>> {
         size_t _from = std::numeric_limits<size_t>::max();
@@ -221,7 +223,20 @@ namespace pdaaal::internal {
             fut::vector_set<size_t> _pre_states;
             explicit state_t(typename PDA<W,fut::type::hash>::state_t&& other_state)
                     : _rules(std::move(other_state._rules)), _pre_states(std::move(other_state._pre_states)) {}
+
             state_t() = default;
+
+            template<typename C>
+            bool has_negative_weight(const C& comp) const {
+                if constexpr (has_weight && W::is_signed) {
+                    for (const auto& [rule,labels] : _rules) {
+                        if (comp(rule._weight, W::zero())) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
         };
 
     public:
@@ -232,6 +247,15 @@ namespace pdaaal::internal {
 
         auto states_begin() noexcept { return _states.begin(); }
         auto states_end() noexcept { return _states.end(); }
+
+        template<typename C>
+        bool has_negative_weight(const C& comp) const {
+            if constexpr (has_weight && W::is_signed)
+                for (const auto& s : _states)
+                    if(s.has_negative_weight(comp))
+                        return true;
+            return false;
+        }
 
         [[nodiscard]] virtual size_t number_of_labels() const = 0;
         const std::vector<state_t>& states() const {

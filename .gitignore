@@ -49,6 +49,9 @@ Testing/
 /cmake-build-debug/
 /cmake-build-release/
 
+#VSCode
+.vscode/
+
 #vim
 *.swp
 /build/

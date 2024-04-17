@@ -4,7 +4,7 @@ on:
   push:
     branches: [ master ]
   pull_request:
-    branches: [ master ]
+    branches: [ master, main ]
   workflow_dispatch:
 
 concurrency:
@@ -21,38 +21,39 @@ jobs:
         config:
           - {
             name: "Ubuntu-gcc",
-            os: ubuntu-latest,
-            cxx: "g++-10",
+            os: ubuntu-22.04,
+            cxx: "g++-13",
             generators: "Ninja",
-            boost_dir: "/lib/cmake/Boost-1.78.0/",
-            boost_platform_version: "20.04",
+            boost_dir: "/lib/cmake/Boost-1.83.0/",
+            boost_platform_version: "22.04",
             boost_toolset: "gcc"
           }
-          - {
-            name: "Ubuntu-clang",
-            os: ubuntu-latest,
-            cxx: "clang++-12",
-            generators: "Ninja",
-            boost_dir: "/lib/cmake/Boost-1.78.0/",
-            boost_platform_version: "20.04",
-            boost_toolset: "gcc"
-          }
+## Wait for clang-16 to be available, as clang <=15 & libstdc++ does not work with <ranges>.
+#          - {
+#            name: "Ubuntu-clang",
+#            os: ubuntu-22.04,
+#            cxx: "clang++-15",
+#            generators: "Ninja",
+#            boost_dir: "/lib/cmake/Boost-1.83.0/",
+#            boost_platform_version: "22.04",
+#            boost_toolset: "gcc"
+#          }
           - {
             name: "Macos-clang",
-            os: macos-latest,
+            os: macos-13,
             cxx: "clang++",
             generators: "Ninja",
             boost_dir: ""
           }
-#          - {
-#            name: "Windows-msvc",
-#            os: windows-latest,
-#            cxx: "cl",
-#            generators: "Visual Studio 17 2022",
-#            boost_dir: "/lib/cmake/Boost-1.78.0/",
-#            boost_platform_version: "2019",
-#            boost_toolset: "msvc"
-#          }
+          # - {
+          #   name: "Windows-msvc",
+          #   os: windows-latest,
+          #   cxx: "cl",
+          #   generators: "Visual Studio 17 2022",
+          #   boost_dir: "/lib/cmake/Boost-1.83.0/",
+          #   boost_platform_version: "2022",
+          #   boost_toolset: "msvc"
+          # }
         build_type: ["Debug","Release"]
 
     steps:
@@ -65,12 +66,12 @@ jobs:
           ninja --version
           cmake --version
 
-#      - name: Install dependencies on windows
-#        if: startsWith(matrix.config.os, 'windows')
-#        run: |
-#          choco install ninja cmake
-#          ninja --version
-#          cmake --version
+      - name: Install dependencies on windows
+        if: startsWith(matrix.config.os, 'windows')
+        run: |
+          choco install ninja cmake
+          ninja --version
+          cmake --version
 
       - name: Install dependencies on ubuntu
         if: startsWith(matrix.config.os, 'ubuntu')
@@ -82,11 +83,11 @@ jobs:
 
       - name: Install boost (ubuntu or windows)
         if: startsWith(matrix.config.os, 'ubuntu') || startsWith(matrix.config.os, 'windows')
-        uses: MarkusJx/install-boost@v2.1.0
+        uses: MarkusJx/install-boost@v2.3.0
         id: install-boost
         with:
           # Set the boost version (required)
-          boost_version: 1.78.0
+          boost_version: 1.83.0
           # OPTIONAL: Specify a platform version
           platform_version: ${{ matrix.config.boost_platform_version }}
           # OPTIONAL: Specify a toolset

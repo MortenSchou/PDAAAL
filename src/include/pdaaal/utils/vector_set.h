@@ -35,9 +35,14 @@
 
 namespace pdaaal::fut {
 
-    template<typename Key, typename Value>
+    template<typename Key, typename Value, typename KeyEq = std::equal_to<Key>, typename KeyLess = std::less<Key>>
     struct vector_map {
+    public:
         struct elem_t {
+        private:
+            static constexpr KeyEq eq{};
+            static constexpr KeyLess less{};
+        public:
             elem_t() = default;
             template <typename... Args>
             explicit elem_t(const Key& key, Args&&... args) : first(key), second(std::forward<Args>(args)...) {}
@@ -47,14 +52,15 @@ namespace pdaaal::fut {
             explicit elem_t(std::pair<Key,Value>&& arg) : first(std::move(arg.first)), second(std::move(arg.second)) {};
             Key first;
             Value second;
-            friend bool operator<( const elem_t& l, const elem_t& r) { return l.first < r.first; }
-            friend bool operator==(const elem_t& l, const elem_t& r) { return l.first == r.first; }
+
+            friend bool operator<( const elem_t& l, const elem_t& r) { return less(l.first, r.first); }
+            friend bool operator==(const elem_t& l, const elem_t& r) { return eq(l.first, r.first); }
             friend bool operator!=(const elem_t& l, const elem_t& r) { return !(l == r); }
-            friend bool operator<( const elem_t& l, const Key& r) { return l.first < r; }
-            friend bool operator==(const elem_t& l, const Key& r) { return l.first == r; }
+            friend bool operator<( const elem_t& l, const Key& r) { return less(l.first, r); }
+            friend bool operator==(const elem_t& l, const Key& r) { return eq(l.first, r); }
             friend bool operator!=(const elem_t& l, const Key& r) { return !(l == r); }
-            friend bool operator<( const Key& l, const elem_t& r) { return l < r.first; }
-            friend bool operator==(const Key& l, const elem_t& r) { return l == r.first; }
+            friend bool operator<( const Key& l, const elem_t& r) { return less(l, r.first); }
+            friend bool operator==(const Key& l, const elem_t& r) { return eq(l, r.first); }
             friend bool operator!=(const Key& l, const elem_t& r) { return !(l == r); }
         };
 
@@ -156,21 +162,28 @@ namespace pdaaal::fut {
             return std::lower_bound(elems.begin(), elems.end(), key);
         }
 
+        // NOTE: This only compares keys. Values are ignored in this comparison.
+        // bool operator==(const vector_map<Key, Value>& other) const { return elems == other.elems; }
+        // bool operator!=(const vector_map<Key, Value>& other) const { return !(*this == other); }
+
     private:
         std::vector<elem_t> elems;
     };
 
-    template<typename Key>
+    template<typename Key, typename KeyEq = std::equal_to<Key>, typename KeyLess = std::less<Key>>
     struct vector_set {
-
+    private:
+        static constexpr KeyEq eq{};
+        static constexpr KeyLess less{};
+    public:
         vector_set() = default;
         template<typename Hash, typename Pred, typename Alloc>
         explicit vector_set(const std::unordered_set<Key,Hash,Pred,Alloc>& other) : elems(other.begin(), other.end()) {
-            std::sort(elems.begin(), elems.end());
+            std::sort(elems.begin(), elems.end(), less);
         }
         template<typename Hash, typename Pred, typename Alloc>
         explicit vector_set(std::unordered_set<Key,Hash,Pred,Alloc>&& other) : elems(std::make_move_iterator(other.begin()), std::make_move_iterator(other.end())) {
-            std::sort(elems.begin(), elems.end());
+            std::sort(elems.begin(), elems.end(), less);
         }
 
         using value_type = typename std::vector<Key>::value_type;
@@ -190,8 +203,8 @@ namespace pdaaal::fut {
         template <typename... Args>
         auto emplace(Args&&... args) {
             Key elem{std::forward<Args>(args)...};
-            auto lb = std::lower_bound(elems.begin(), elems.end(), elem);
-            if (lb == elems.end() || *lb != elem) {
+            auto lb = std::lower_bound(elems.begin(), elems.end(), elem, less);
+            if (lb == elems.end() || !eq(*lb, elem)) {
                 lb = elems.insert(lb, std::move(elem));
                 return std::make_pair(lb, true);
             }
@@ -199,20 +212,20 @@ namespace pdaaal::fut {
         }
 
         bool contains(const Key& key) const {
-            auto lb = std::lower_bound(elems.begin(), elems.end(), key);
-            return lb != elems.end() && *lb == key;
+            auto lb = std::lower_bound(elems.begin(), elems.end(), key, less);
+            return lb != elems.end() && eq(*lb, key);
         }
 
         iterator find(const Key& key) {
-            auto lb = std::lower_bound(elems.begin(), elems.end(), key);
-            if (lb == elems.end() || *lb != key) {
+            auto lb = std::lower_bound(elems.begin(), elems.end(), key, less);
+            if (lb == elems.end() || !eq(*lb, key)) {
                 return elems.end();
             }
             return lb;
         }
         const_iterator find(const Key& key) const {
-            auto lb = std::lower_bound(elems.begin(), elems.end(), key);
-            if (lb == elems.end() || *lb != key) {
+            auto lb = std::lower_bound(elems.begin(), elems.end(), key, less);
+            if (lb == elems.end() || !eq(*lb, key)) {
                 return elems.end();
             }
             return lb;
@@ -226,8 +239,11 @@ namespace pdaaal::fut {
         void clear() noexcept { elems.clear(); };
 
         auto lower_bound(const Key& key) const {
-            return std::lower_bound(elems.begin(), elems.end(), key);
+            return std::lower_bound(elems.begin(), elems.end(), key, less);
         }
+
+        bool operator==(const vector_set<Key>& other) const { return std::equal(begin(), end(), other.begin(), other.end(), eq); }
+        bool operator!=(const vector_set<Key>& other) const { return !(*this == other); }
 
     private:
         std::vector<Key> elems;

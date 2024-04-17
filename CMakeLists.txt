@@ -8,7 +8,7 @@ if (NOT CMAKE_BUILD_TYPE)
 endif (NOT CMAKE_BUILD_TYPE)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(PDAAAL_VERSION 1.0.0)
+set(PDAAAL_VERSION 1.1.0)
 project(pdaaal VERSION ${PDAAAL_VERSION} LANGUAGES CXX)
 
 # MAIN_PROJECT CHECK
@@ -37,13 +37,11 @@ if (PDAAAL_BuildStatic)
     set(CMAKE_EXE_LINKER_FLAGS "-static")
 endif (PDAAAL_BuildStatic)
 
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lstdc++")
-
 if(PDAAAL_AddressSanitizer)
     add_compile_options(-fno-omit-frame-pointer -fsanitize=address)
 endif(PDAAAL_AddressSanitizer)
 
-find_package(Boost 1.70 CONFIG REQUIRED COMPONENTS headers program_options unit_test_framework)
+find_package(Boost 1.70 REQUIRED COMPONENTS program_options unit_test_framework)
 
 #actual library
 add_subdirectory(src/include)

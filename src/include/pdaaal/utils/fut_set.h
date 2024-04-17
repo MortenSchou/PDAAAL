@@ -27,7 +27,6 @@
 #ifndef PDAAAL_FUT_SET_H
 #define PDAAAL_FUT_SET_H
 
-#include "std20.h"
 #include "vector_set.h"
 #include "absl_hash.h"
 
