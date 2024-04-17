@@ -30,30 +30,31 @@
 #include <filesystem>
 #include <boost/program_options.hpp>
 #include <pdaaal/Solver.h>
-#include <pdaaal/TypedPAutomaton.h>
+#include <pdaaal/PAutomaton.h>
 #include "IsabellePrettyPrinter.h"
 #include "../src/pdaaal-bin/parsing/PdaJsonParser.h"
+#include "../src/pdaaal-bin/parsing/PAutomatonJsonParser.h"
 
 namespace fs = std::filesystem;
 namespace po = boost::program_options;
 using namespace pdaaal;
 
 template <typename pda_t>
-bool solve_pre(const pda_t& pda, PAutomaton<> initial_automaton, PAutomaton<> final_automaton) {
+bool solve_pre(const pda_t& pda, pda_to_pautomaton_t<pda_t> initial_automaton, pda_to_pautomaton_t<pda_t> final_automaton) {
     PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
     bool answer = Solver::pre_star_accepts(instance);
     return answer;
 }
 template <typename pda_t>
-bool solve_post(const pda_t& pda, PAutomaton<> initial_automaton, PAutomaton<> final_automaton) {
+bool solve_post(const pda_t& pda, pda_to_pautomaton_t<pda_t> initial_automaton, pda_to_pautomaton_t<pda_t> final_automaton) {
     PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
     bool answer = Solver::post_star_accepts(instance);
     return answer;
 }
 template <typename pda_t>
-bool solve_dual(const pda_t& pda, PAutomaton<> initial_automaton, PAutomaton<> final_automaton) {
+bool solve_dual(const pda_t& pda, pda_to_pautomaton_t<pda_t> initial_automaton, pda_to_pautomaton_t<pda_t> final_automaton) {
     PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
-    bool answer = Solver::dual_search_accepts(instance);
+    bool answer = Solver::dual_search_accepts<Trace_Type::None>(instance);
     return answer;
 }
 
@@ -97,9 +98,9 @@ void print_lemmas(bool answer_pre, bool answer_post, bool answer_dual, const std
 template <bool use_state_names>
 void run(std::istream& pda_stream, std::istream& initial_stream, std::istream& final_stream, size_t pds_id, size_t initial_id, size_t final_id, bool full, bool setup = false, bool instance = false) {
     std::stringstream dummy;
-    auto pda = PdaJSONParser::parse<weight<void>,use_state_names>(pda_stream, dummy);
-    auto initial_automaton = PAutomatonJsonParser::parse(initial_stream, pda);
-    auto final_automaton = PAutomatonJsonParser::parse(final_stream, pda);
+    auto pda = parsing::PdaJsonParser::parse<weight<void>,use_state_names>(pda_stream, dummy);
+    auto initial_automaton = parsing::PAutomatonJsonParser::parse(initial_stream, pda);
+    auto final_automaton = parsing::PAutomatonJsonParser::parse(final_stream, pda);
 
     if (setup) {
         IsabellePrettyPrinter isabelle_pp(std::cout);

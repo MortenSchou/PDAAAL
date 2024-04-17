@@ -33,7 +33,7 @@
 #include <filesystem>
 #include <boost/program_options.hpp>
 #include <pdaaal/Solver.h>
-#include <pdaaal/TypedPAutomaton.h>
+#include <pdaaal/PAutomaton.h>
 
 #include "IsabellePrettyPrinter.h"
 
@@ -41,8 +41,8 @@ namespace fs = std::filesystem;
 namespace po = boost::program_options;
 using namespace pdaaal;
 
-using generated_pda_t = TypedPDA<std::string,weight<void>,fut::type::vector,std::string>;
-using generated_automaton_t = decltype(TypedPAutomaton(std::declval<generated_pda_t>(), std::declval<std::vector<size_t>>(), true));
+using generated_pda_t = PDA<std::string,weight<void>,fut::type::vector,std::string>;
+using generated_automaton_t = decltype(PAutomaton(std::declval<generated_pda_t>(), std::declval<std::vector<size_t>>(), true));
 
 generated_pda_t generate_pda(size_t num_states, size_t num_labels, size_t num_rules, std::mt19937& random_gen, std::ostream& debug) {
     std::string alphabet = "ABCDEFGHIJKLMNOPQRSTUVXYZ";
@@ -136,7 +136,7 @@ generated_automaton_t generate_pautomaton(const generated_pda_t& pda, size_t num
     return automaton;
 }
 
-void print_rules_simple(std::ostream& out, const TypedPDA<char>& pda) {
+void print_rules_simple(std::ostream& out, const PDA<char>& pda) {
     auto rules = pda.all_rules();
     for (const auto& rule : rules) {
         out << "<p" << rule._from << ", " << rule._pre << "> --> <p" << rule._to << ", ";
@@ -161,7 +161,7 @@ void print_rules_simple(std::ostream& out, const TypedPDA<char>& pda) {
     out << "Count rules: " << rules.size() << std::endl;
 }
 
-bool to_isabelle(std::ostream& out, const generated_pda_t& pda, PAutomaton<> initial_automaton, PAutomaton<> final_automaton) {
+bool to_isabelle(std::ostream& out, const generated_pda_t& pda, pda_to_pautomaton_t<generated_pda_t> initial_automaton, pda_to_pautomaton_t<generated_pda_t> final_automaton) {
     IsabellePrettyPrinter isabelle_pp(out);
     isabelle_pp.print_begin();
     isabelle_pp.print_query(pda, initial_automaton, final_automaton);
@@ -172,7 +172,7 @@ bool to_isabelle(std::ostream& out, const generated_pda_t& pda, PAutomaton<> ini
     isabelle_pp.print_end();
     return answer;
 }
-bool solve(const generated_pda_t& pda, PAutomaton<> initial_automaton, PAutomaton<> final_automaton) {
+bool solve(const generated_pda_t& pda, pda_to_pautomaton_t<generated_pda_t> initial_automaton, pda_to_pautomaton_t<generated_pda_t> final_automaton) {
     PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
     bool answer = Solver::pre_star_accepts(instance);
     return answer;
@@ -429,7 +429,7 @@ void generate_pautomata_without_symmetries(const fs::path& output_dir, bool init
     auto trans_to_seed = [num_states,num_extra_states,num_labels,all_transitions](size_t from, size_t to, size_t label){
         return (from * num_extra_states + (to - num_states)) * num_labels + label;
     };
-    auto add_transition = [&seed_to_trans](size_t seed, pdaaal::PAutomaton<>& automaton){
+    auto add_transition = [&seed_to_trans](size_t seed, pda_to_pautomaton_t<generated_pda_t>& automaton){
         auto [from, to, label] = seed_to_trans(seed);
         automaton.add_edge(from, to, label);
     };
@@ -501,7 +501,7 @@ void generate_pautomata_without_symmetries(const fs::path& output_dir, bool init
                         initially_accepting_states.push_back(pautomaton_state);
                     }
                 }
-                pdaaal::TypedPAutomaton automaton(pda, initially_accepting_states, true);
+                pdaaal::PAutomaton automaton(pda, initially_accepting_states, true);
                 automaton.insert_state("q2");
                 automaton.insert_state("q3");
                 bool skip = false;

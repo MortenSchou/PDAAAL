@@ -99,7 +99,7 @@ namespace pdaaal {
         }
         template <typename instance_t>
         std::pair<bool,json> compare_part1(instance_t& instance) {
-            using pda_t = std20::remove_cvref_t<decltype(instance.pda())>;
+            using pda_t = std::remove_cvref_t<decltype(instance.pda())>;
             if constexpr (pda_t::has_weight) {
                 bool result;
                 json j_weight;
@@ -122,7 +122,7 @@ namespace pdaaal {
 
         template <typename instance_t>
         std::pair<bool,json> compare_part2(instance_t& instance) {
-            using pda_t = std20::remove_cvref_t<decltype(instance.pda())>;
+            using pda_t = std::remove_cvref_t<decltype(instance.pda())>;
             using W = typename pda_t::weight;
             if constexpr(W::is_signed) {
                 throw std::runtime_error("Signed weight is not supported for WPDS++ engine.");
@@ -202,7 +202,7 @@ namespace pdaaal {
         void verify_wpds(instance_t& instance, json_stream& json_out) {
             if (!use_wpds()) return;
 
-            using pda_t = std20::remove_cvref_t<decltype(instance.pda())>;
+            using pda_t = std::remove_cvref_t<decltype(instance.pda())>;
             using W = typename pda_t::weight;
             if constexpr(W::is_signed) {
                 throw std::runtime_error("Signed weight is not supported for WPDS++ engine.");

@@ -12,6 +12,7 @@ ExternalProject_add(wpds
     BUILD_IN_SOURCE 1
     CONFIGURE_COMMAND ""
     INSTALL_COMMAND ""
+    DOWNLOAD_EXTRACT_TIMESTAMP ON
 )
 ExternalProject_Get_property(wpds SOURCE_DIR)
 add_custom_target(wpds-fix-file ALL

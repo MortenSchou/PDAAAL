@@ -51,7 +51,11 @@ public:
     explicit IsabellePrettyPrinter(std::ostream& out) : _out(out) { };
 
     template<typename pda_t>
-    void print_setup(const pda_t& pda, const pdaaal::PAutomaton<>& initial_automaton, const pdaaal::PAutomaton<>& final_automaton, const std::string& label_prefix = "", bool more_automaton_states = false) {
+    void print_setup(const pda_t& pda,
+                     const pdaaal::pda_to_pautomaton_t<pda_t>& initial_automaton,
+                     const pdaaal::pda_to_pautomaton_t<pda_t>& final_automaton,
+                     const std::string& label_prefix = "",
+                     bool more_automaton_states = false) {
         assert(label_prefix.find(' ') == std::string::npos);
         size_t num_states = pda.states().size();
         size_t num_labels = pda.number_of_labels();
@@ -139,7 +143,10 @@ public:
 
 
     template<typename pda_t>
-    void print_instance(const pda_t& pda, const pdaaal::PAutomaton<>& initial_automaton, const pdaaal::PAutomaton<>& final_automaton, const std::string& label_prefix = "") {
+    void print_instance(const pda_t& pda,
+                        const pdaaal::pda_to_pautomaton_t<pda_t>& initial_automaton,
+                        const pdaaal::pda_to_pautomaton_t<pda_t>& final_automaton,
+                        const std::string& label_prefix = "") {
         _out << "(* Define rules of PDS, and the two P-automata *)" << std::endl;
         print_rules("pds_rules", pda, label_prefix);
         print_automaton("initial", initial_automaton, pda, label_prefix);
@@ -148,7 +155,10 @@ public:
     }
 
     template<typename pda_t>
-    void print_query(const pda_t& pda, const pdaaal::PAutomaton<>& initial_automaton, const pdaaal::PAutomaton<>& final_automaton, const std::string& label_prefix = "") {
+    void print_query(const pda_t& pda,
+                     const pdaaal::pda_to_pautomaton_t<pda_t>& initial_automaton,
+                     const pdaaal::pda_to_pautomaton_t<pda_t>& final_automaton,
+                     const std::string& label_prefix = "") {
         print_setup(pda, initial_automaton, final_automaton, label_prefix);
         _out << std::endl;
         print_instance(pda, initial_automaton, final_automaton, label_prefix);
@@ -318,7 +328,8 @@ end
     }
 
 //protected:
-    std::ostream& print_automaton_state(size_t state, const pdaaal::PAutomaton<>& automaton, bool print_type = true) {
+    template<typename pautomaton_t>
+    std::ostream& print_automaton_state(size_t state, const pautomaton_t& automaton, bool print_type = true) {
         if (state < automaton.pda().states().size()) {
             if (print_type) {
                 _out << "Initial ";
@@ -372,7 +383,7 @@ end
         return _out;
     }
     template<typename pda_t>
-    std::ostream& print_automaton(const std::string& name_prefix, const pdaaal::PAutomaton<>& automaton, const pda_t& pda, const std::string& label_prefix = "") {
+    std::ostream& print_automaton(const std::string& name_prefix, const pdaaal::pda_to_pautomaton_t<pda_t>& automaton, const pda_t& pda, const std::string& label_prefix = "") {
         _out << "definition " << name_prefix
              << "_automaton :: \"((ctr_loc, state, label) PDS.state, label) transition set\" where" << std::endl;
 
