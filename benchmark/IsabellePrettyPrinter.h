@@ -332,17 +332,41 @@ end
     std::ostream& print_automaton_state(size_t state, const pautomaton_t& automaton, bool print_type = true) {
         if (state < automaton.pda().states().size()) {
             if (print_type) {
-                _out << "Initial ";
+                _out << "Init ";
             }
             _out << "p" << state;
         } else {
             if (print_type) {
-                _out << "Noninitial ";
+                _out << "Noninit ";
             }
             _out << "q" << state;
         }
         return _out;
     }
+    template<typename rule_t>
+    std::ostream& print_rule(const rule_t& rule, const std::string& label_prefix = "") {
+        _out << "((p" << rule._from << ", " << label_prefix << rule._pre << "), (p" << rule._to << ", ";
+        switch (rule._op) {
+            case pdaaal::POP:
+                _out << "pop";
+                break;
+            case pdaaal::SWAP:
+                _out << "swap " << label_prefix << rule._op_label;
+                break;
+            case pdaaal::NOOP:
+                _out << "swap " << label_prefix << rule._pre;
+                break;
+            case pdaaal::PUSH:
+                _out << "push " << label_prefix << rule._op_label << " " << label_prefix << rule._pre;
+                break;
+            default:
+                throw std::logic_error("error: Unknown op type.");
+                break;
+        }
+        _out << "))";
+        return _out;
+    }
+
     template<typename pda_t>
     std::ostream& print_rules(const std::string& name, const pda_t& pda, const std::string& label_prefix = "") {
         auto rules = pda.all_rules();
@@ -359,40 +383,34 @@ end
             } else {
                 _out << "," << std::endl;
             }
-            _out << "  ((p" << rule._from << ", " << label_prefix << rule._pre << "), (p" << rule._to << ", ";
-            switch (rule._op) {
-                case pdaaal::POP:
-                    _out << "pop";
-                    break;
-                case pdaaal::SWAP:
-                    _out << "swap " << label_prefix << rule._op_label;
-                    break;
-                case pdaaal::NOOP:
-                    _out << "swap " << label_prefix << rule._pre;
-                    break;
-                case pdaaal::PUSH:
-                    _out << "push " << label_prefix << rule._op_label << " " << label_prefix << rule._pre;
-                    break;
-                default:
-                    throw std::logic_error("error: Unknown op type.");
-                    break;
-            }
-            _out << "))";
+            _out << "  "; print_rule(rule, label_prefix);
         }
         _out << "}\"" << std::endl;
+
+        if constexpr (pda_t::has_weight) {
+            _out << "definition " << name << "_W :: \"(ctr_loc, label) rule => nat_inf\" where" << std::endl;
+            _out << "  \"" << name << "_W rule = (K$ infinity)" << std::endl;
+            for (const auto& rule : rules) {
+                _out << "  ("; print_rule(rule, label_prefix) << " $:= fin " << rule._weight << ")" << std::endl;
+            }
+            _out << "   $ rule\"" << std::endl;
+        }
         return _out;
     }
     template<typename pda_t>
     std::ostream& print_automaton(const std::string& name_prefix, const pdaaal::pda_to_pautomaton_t<pda_t>& automaton, const pda_t& pda, const std::string& label_prefix = "") {
+        std::string state_type = pda_t::has_weight ? "(ctr_loc, state) WPDS.state" : "(ctr_loc, state, label) PDS.state";
         _out << "definition " << name_prefix
-             << "_automaton :: \"((ctr_loc, state, label) PDS.state, label) transition set\" where" << std::endl;
+             << "_automaton :: \"(" << state_type << ", label) transition set\" where" << std::endl;
 
         bool first = true;
+        std::vector<size_t> accepting;
         std::vector<size_t> accepting_ctr_loc;
         std::vector<size_t> accepting_ctr_loc_st;
         for (const auto& state: automaton.states()) {
             auto from = state->_id;
             if (state->_accepting) {
+                accepting.push_back(from); // New setup doesn't need to distinguish here..
                 if (from < automaton.pda().states().size()) {
                     accepting_ctr_loc.push_back(from);
                 } else {
@@ -418,10 +436,16 @@ end
         } else {
             _out << "}\"" << std::endl;
         }
-        _out << "definition " << name_prefix << "_ctr_loc where \"" << name_prefix << "_ctr_loc = {";
-        print_list(_out, accepting_ctr_loc, ", ", "", [&automaton,this](std::ostream& s, size_t state){ print_automaton_state(state, automaton, false); }) << "}\"" << std::endl;
-        _out << "definition " << name_prefix << "_ctr_loc_st where \"" << name_prefix << "_ctr_loc_st = {";
-        print_list(_out, accepting_ctr_loc_st, ", ", "", [&automaton,this](std::ostream& s, size_t state){ print_automaton_state(state, automaton, false); }) << "}\"" << std::endl;
+        if constexpr (pda_t::has_weight) {
+            _out << "definition " << name_prefix << "_finals where \"" << name_prefix << "_finals = {";
+            print_list(_out, accepting, ", ", "", [&automaton,this](std::ostream& s, size_t state){ print_automaton_state(state, automaton); }) << "}\"" << std::endl;
+        } else {
+            // This is actually independent of weight, but the old (unweighted) formalization used a different format..
+            _out << "definition " << name_prefix << "_ctr_loc where \"" << name_prefix << "_ctr_loc = {";
+            print_list(_out, accepting_ctr_loc, ", ", "", [&automaton,this](std::ostream& s, size_t state){ print_automaton_state(state, automaton, false); }) << "}\"" << std::endl;
+            _out << "definition " << name_prefix << "_ctr_loc_st where \"" << name_prefix << "_ctr_loc_st = {";
+            print_list(_out, accepting_ctr_loc_st, ", ", "", [&automaton,this](std::ostream& s, size_t state){ print_automaton_state(state, automaton, false); }) << "}\"" << std::endl;
+        }
         return _out;
     }
 

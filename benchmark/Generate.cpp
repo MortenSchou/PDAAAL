@@ -41,15 +41,21 @@ namespace fs = std::filesystem;
 namespace po = boost::program_options;
 using namespace pdaaal;
 
-using generated_pda_t = PDA<std::string,weight<void>,fut::type::vector,std::string>;
-using generated_automaton_t = decltype(PAutomaton(std::declval<generated_pda_t>(), std::declval<std::vector<size_t>>(), true));
+template<bool with_weight>
+using generated_pda_t = PDA<std::string,std::conditional_t<with_weight,weight<uint32_t>,weight<void>>,fut::type::vector,std::string>;
+template<bool with_weight>
+using generated_automaton_t = decltype(PAutomaton(std::declval<generated_pda_t<with_weight>>(), std::declval<std::vector<size_t>>(), true));
 
-generated_pda_t generate_pda(size_t num_states, size_t num_labels, size_t num_rules, std::mt19937& random_gen, std::ostream& debug) {
+template<bool with_weight = false>
+generated_pda_t<with_weight> generate_pda(size_t num_states, size_t num_labels, size_t num_rules, std::mt19937& random_gen, std::ostream& debug, size_t num_weights = 0) {
+    if constexpr (!with_weight) {
+        num_weights = 0;
+    }
     std::string alphabet = "ABCDEFGHIJKLMNOPQRSTUVXYZ";
     if (num_labels >= alphabet.size()) {
         throw std::logic_error("Too many labels specified. Change implementation, if you need this.");
     }
-    generated_pda_t pda;
+    generated_pda_t<with_weight> pda;
     std::vector<std::string> labels;
     labels.reserve(num_labels);
     for (size_t i = 0; i < num_labels; ++i) {
@@ -63,20 +69,27 @@ generated_pda_t generate_pda(size_t num_states, size_t num_labels, size_t num_ru
     }
     assert(labels.size() == num_labels);
     auto num_ops = 1 + 2 * num_labels;
-    auto all_rules = num_states * num_states * num_labels * num_ops;
-    auto add_rule = [&pda,&labels,num_states,num_labels,num_ops,all_rules](size_t seed){
+    auto all_rules = num_states * num_states * num_labels * num_ops * (num_weights == 0 ? 1 : num_weights);
+    auto add_rule = [&pda,&labels,num_states,num_labels,num_ops,num_weights,all_rules](size_t seed){
         auto rule_num = seed % all_rules;
         auto op_num = rule_num % num_ops;
         auto remain = rule_num / num_ops;
         auto pre = remain % num_labels;
         remain = remain / num_labels;
         auto to = remain % num_states;
-        auto from = remain / num_states;
+        remain = remain / num_states;
+        auto from = remain % num_states;
+        auto weight = remain / num_states;
         assert(pre < num_labels);
         assert(from < num_states);
         assert(to < num_states);
+        assert((num_weights == 0) ? weight <= num_weights : weight < num_weights);
         if (op_num == 0) {
-            pda.add_rule(from, to, POP, "", labels[pre]);
+            if constexpr (with_weight) {
+                pda.add_rule(from, to, POP, "", labels[pre], (uint32_t)weight);
+            } else {
+                pda.add_rule(from, to, POP, "", labels[pre]);
+            }
         } else {
             auto op = (op_num - 1) % 2 == 0 ? SWAP : PUSH;
             auto op_label = (op_num - 1) / 2;
@@ -84,7 +97,11 @@ generated_pda_t generate_pda(size_t num_states, size_t num_labels, size_t num_ru
             if (op == SWAP && op_label == pre) {
                 op = NOOP;
             }
-            pda.add_rule(from, to, op, labels[op_label], labels[pre]);
+            if constexpr (with_weight) {
+                pda.add_rule(from, to, op, labels[op_label], labels[pre], (uint32_t)weight);
+            } else {
+                pda.add_rule(from, to, op, labels[op_label], labels[pre]);
+            }
         }
         return rule_num;
     };
@@ -96,13 +113,14 @@ generated_pda_t generate_pda(size_t num_states, size_t num_labels, size_t num_ru
     return pda;
 }
 
-generated_automaton_t generate_pautomaton(const generated_pda_t& pda, size_t num_extra_states, size_t num_transitions, std::mt19937& random_gen, std::ostream& debug) {
+template<bool with_weight = false>
+generated_automaton_t<with_weight> generate_pautomaton(const generated_pda_t<with_weight>& pda, size_t num_extra_states, size_t num_transitions, std::mt19937& random_gen, std::ostream& debug) {
     size_t num_states = pda.states().size();
     size_t num_labels = pda.number_of_labels();
 
     // TODO: Which parameters to use for randomly selecting accepting states.
-    std::uniform_int_distribution<size_t> accept_init_distrib(0, 5);
-    std::uniform_int_distribution<size_t> accept_extra_distrib(0, 2);
+    std::uniform_int_distribution<size_t> accept_init_distrib(0, 4);
+    std::uniform_int_distribution<size_t> accept_extra_distrib(0, 3);
 
     std::vector<size_t> initially_accepting_states;
     for (size_t i = 0; i < num_states; ++i) {
@@ -110,9 +128,9 @@ generated_automaton_t generate_pautomaton(const generated_pda_t& pda, size_t num
             initially_accepting_states.push_back(i);
         }
     }
-    generated_automaton_t automaton(pda, initially_accepting_states, true);
+    generated_automaton_t<with_weight> automaton(pda, initially_accepting_states, true);
     for (size_t i = 0; i < num_extra_states; ++i) {
-        bool accepting = accept_extra_distrib(random_gen) == 0;
+        bool accepting = accept_extra_distrib(random_gen) <= 1;
         automaton.add_state(false, accepting);
         std::stringstream state_name; state_name << "q" << i;
         automaton.insert_state(state_name.str());
@@ -161,7 +179,8 @@ void print_rules_simple(std::ostream& out, const PDA<char>& pda) {
     out << "Count rules: " << rules.size() << std::endl;
 }
 
-bool to_isabelle(std::ostream& out, const generated_pda_t& pda, pda_to_pautomaton_t<generated_pda_t> initial_automaton, pda_to_pautomaton_t<generated_pda_t> final_automaton) {
+template<typename pda_t>
+bool to_isabelle(std::ostream& out, const pda_t& pda, pda_to_pautomaton_t<pda_t> initial_automaton, pda_to_pautomaton_t<pda_t> final_automaton) {
     IsabellePrettyPrinter isabelle_pp(out);
     isabelle_pp.print_begin();
     isabelle_pp.print_query(pda, initial_automaton, final_automaton);
@@ -172,11 +191,48 @@ bool to_isabelle(std::ostream& out, const generated_pda_t& pda, pda_to_pautomato
     isabelle_pp.print_end();
     return answer;
 }
-bool solve(const generated_pda_t& pda, pda_to_pautomaton_t<generated_pda_t> initial_automaton, pda_to_pautomaton_t<generated_pda_t> final_automaton) {
+
+enum class engine_t {prestar, poststar, dualstar};
+template<typename pda_t>
+bool solve(const pda_t& pda, pda_to_pautomaton_t<pda_t> initial_automaton, pda_to_pautomaton_t<pda_t> final_automaton, engine_t engine) {
     PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
-    bool answer = Solver::pre_star_accepts(instance);
-    return answer;
+    switch (engine) {
+        case engine_t::prestar:
+            return Solver::pre_star_accepts<Trace_Type::None>(instance);
+        case engine_t::poststar:
+            return Solver::post_star_accepts<Trace_Type::None>(instance);
+        case engine_t::dualstar:
+        default:
+            return Solver::dual_search_accepts<Trace_Type::None>(instance);
+    }
 }
+template<typename pda_t>
+std::optional<typename pda_t::weight_type> solve_w(const pda_t& pda, pda_to_pautomaton_t<pda_t> initial_automaton, pda_to_pautomaton_t<pda_t> final_automaton, engine_t engine) {
+    static_assert(pda_t::has_weight, "Can only solve weight on weighted PDA.");
+    PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
+    switch (engine) {
+        case engine_t::prestar:
+            if (Solver::pre_star_accepts<Trace_Type::Shortest>(instance)) {
+                return Solver::get_trace<Trace_Type::Shortest>(instance).second;
+            } else {
+                return std::nullopt;
+            }
+        case engine_t::poststar:
+            if (Solver::post_star_accepts<Trace_Type::Shortest>(instance)) {
+                return Solver::get_trace<Trace_Type::Shortest>(instance).second;
+            } else {
+                return std::nullopt;
+            }
+        case engine_t::dualstar:
+        default:
+            if (Solver::dual_search_accepts<Trace_Type::Shortest>(instance)) {
+                return Solver::get_trace_dual_search<Trace_Type::Shortest>(instance).second;
+            } else {
+                return std::nullopt;
+            }
+    }
+}
+
 
 void generate(std::ostream& out, std::mt19937& random_gen, bool debug_info
 #ifndef NDEBUG
@@ -218,25 +274,58 @@ void print_json(const json& j, const fs::path& output_dir, const std::string& na
     out_stream << j.dump() << std::endl;
 }
 
+template<typename T>
+bool has_different_elements(std::vector<T> v) {
+    for(size_t i = 1; i < v.size(); ++i) {
+        if (v[i] != v[i-1]) return true;
+    }
+    return false;
+}
+
+template<bool with_weight = false>
 void generate_many(std::mt19937& random_gen, const fs::path& output_dir, size_t number_of_instances) {
     std::stringstream dummy;
 
     // Variables for statistics
     size_t count_p = 0, count_n = 0, count_already_intersecting = 0;
+    std::unordered_map<uint32_t,size_t> weight_counts;
 
     for (size_t i = 0; i < number_of_instances; ++i) {
         // Generate
-        auto pda = generate_pda(4, 5, i%200, random_gen, dummy);
-        auto initial_automaton = generate_pautomaton(pda, 3, i%13, random_gen, dummy);
-        auto final_automaton = generate_pautomaton(pda, 2, i%11, random_gen, dummy);
+        auto pda = generate_pda<with_weight>(4, 5, i%200, random_gen, dummy, i%19);
+        auto initial_automaton = generate_pautomaton<with_weight>(pda, 3, i%13, random_gen, dummy);
+        auto final_automaton = generate_pautomaton<with_weight>(pda, 2, i%11, random_gen, dummy);
 
 
         print_json(pda.to_json(), output_dir, "pda", i);
         print_json(initial_automaton.to_json(), output_dir, "initial", i);
         print_json(final_automaton.to_json(), output_dir, "final", i);
 
+        std::vector<bool> answers;
+        std::vector<uint32_t> weights;
+        engine_t engines[] = {engine_t::prestar, engine_t::poststar, engine_t::dualstar};
+        for (auto engine : engines) {
+            bool answer = solve(pda, initial_automaton, final_automaton, engine);
+            answers.push_back(answer);
+            if constexpr (with_weight) {
+                std::optional<uint32_t> weight = solve_w(pda, initial_automaton, final_automaton, engine);
+                answers.push_back(weight.has_value());
+                if (weight.has_value()) {
+                    weights.push_back(weight.value());
+                }
+            }
+        }
+        if (has_different_elements(answers)) std::cout << "WHOOPS: Different answers on case " << i << ". " << vector_printer() << answers << std::endl;
+        if (has_different_elements(weights)) std::cout << "WHOOPS: Different weights on case " << i << ". " << vector_printer() << weights << std::endl;
+
         // Get statistics
-        bool answer = solve(pda, initial_automaton, final_automaton);
+        bool answer = solve(pda, initial_automaton, final_automaton, engine_t::prestar);
+        if constexpr (with_weight) {
+            auto weight = solve_w(pda, initial_automaton, final_automaton, engine_t::prestar);
+            if (weight.has_value()) weight_counts[weight.value()]++;
+        }
+
+
         PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
         instance.enable_pre_star();
         if (instance.initialize_product()) { count_already_intersecting++; }
@@ -245,13 +334,18 @@ void generate_many(std::mt19937& random_gen, const fs::path& output_dir, size_t 
 
     std::cout << "Positive: " << count_p << std::endl
               << "Negative: " << count_n << std::endl
-              << "Trivial: " << count_already_intersecting << std::endl;
+              << "Trivially positive: " << count_already_intersecting << std::endl;
+    for (const auto& [weight, count] : pdaaal::fut::vector_map<uint32_t,size_t>(std::move(weight_counts))) {
+        std::cout << weight << ": " << count << std::endl;
+    }
 }
 
+template<bool with_weight = false>
 void generate_pda_without_symmetries(const fs::path& output_dir) {
     // Parameters:
     size_t num_states = 2;
     size_t num_labels = 2;
+    size_t num_weights = 2; // if constexpr (with_weight) then we use weights 1 and 2. (else unweighted)
     std::string alphabet = "ABCDEFGHIJKLMNOPQRSTUVXYZ";
     bool do_reduction = true;
 
@@ -267,28 +361,30 @@ void generate_pda_without_symmetries(const fs::path& output_dir) {
     }
     assert(labels.size() == num_labels);
     auto num_ops = 1 + 2 * num_labels;
-    auto all_rules = num_states * num_states * num_labels * num_ops;
-    auto seed_to_rule = [num_states,num_labels,num_ops,all_rules](size_t seed) -> std::tuple<size_t,size_t,op_t,std::optional<size_t>,size_t> {
+    auto all_rules = num_states * num_states * num_labels * num_ops * (with_weight ? num_weights : 1);
+    auto seed_to_rule = [num_states,num_labels,num_ops,num_weights,all_rules](size_t seed) -> std::tuple<size_t,size_t,op_t,std::optional<size_t>,size_t,uint32_t> {
         auto rule_num = seed % all_rules;
         auto op_num = rule_num % num_ops;
         auto remain = rule_num / num_ops;
         auto pre = remain % num_labels;
         remain = remain / num_labels;
         auto to = remain % num_states;
-        auto from = remain / num_states;
+        remain = remain / num_states;
+        auto from = remain % num_states;
+        auto weight = (uint32_t)(1 + remain / num_states); // using weights 1 or 2.
         assert(pre < num_labels);
         assert(from < num_states);
         assert(to < num_states);
         if (op_num == 0) {
-            return std::tuple(from, to, POP, std::nullopt, pre);
+            return std::tuple(from, to, POP, std::nullopt, pre, weight);
         } else {
             auto op = (op_num - 1) % 2 == 0 ? SWAP : PUSH;
             auto op_label = (op_num - 1) / 2;
             assert(op_label < num_labels);
-            return std::tuple(from, to, op, op_label, pre);
+            return std::tuple(from, to, op, op_label, pre, weight);
         }
     };
-    auto rule_to_seed = [num_states,num_labels,num_ops](size_t from, size_t to, op_t op, std::optional<size_t> op_label, size_t pre) -> size_t {
+    auto rule_to_seed = [num_states,num_labels,num_ops](size_t from, size_t to, op_t op, std::optional<size_t> op_label, size_t pre, uint32_t weight) -> size_t {
         size_t op_num = 0;
         if (op != POP) {
             assert(op_label);
@@ -297,18 +393,22 @@ void generate_pda_without_symmetries(const fs::path& output_dir) {
                 op_num++;
             }
         }
-        return ((from * num_states + to) * num_labels + pre) * num_ops + op_num;
+        return ((((weight - 1) * num_states + from) * num_states + to) * num_labels + pre) * num_ops + op_num;
     };
-    auto add_rule = [&labels,&seed_to_rule](size_t seed, generated_pda_t& pda){
-        auto [from, to, op, op_label, pre] = seed_to_rule(seed);
+    auto add_rule = [&labels,&seed_to_rule](size_t seed, generated_pda_t<with_weight>& pda){
+        auto [from, to, op, op_label, pre, weight] = seed_to_rule(seed);
         if (op == SWAP && op_label && op_label.value() == pre) {
             op = NOOP;
         }
-        pda.add_rule(from, to, op, op_label ? labels[op_label.value()] : "", labels[pre]);
+        if constexpr (with_weight) {
+            pda.add_rule(from, to, op, op_label ? labels[op_label.value()] : "", labels[pre], weight);
+        } else {
+            pda.add_rule(from, to, op, op_label ? labels[op_label.value()] : "", labels[pre]);
+        }
     };
     for (size_t i = 0; i < all_rules; ++i) {
-        auto [from, to, op, op_label, pre] = seed_to_rule(i);
-        assert(i == rule_to_seed(from, to, op, op_label, pre));
+        auto [from, to, op, op_label, pre, weight] = seed_to_rule(i);
+        if(i != rule_to_seed(from, to, op, op_label, pre, weight)) throw std::logic_error("Error in rule<-->seed conversion!!");
     }
     auto swap_0_1 = [](size_t n) -> size_t {
         if (n == 0) {
@@ -318,16 +418,16 @@ void generate_pda_without_symmetries(const fs::path& output_dir) {
         }
     };
     auto rule_swap_state = [&seed_to_rule,&rule_to_seed,&swap_0_1](size_t seed) -> size_t {
-        auto [from, to, op, op_label, pre] = seed_to_rule(seed);
-        return rule_to_seed(swap_0_1(from), swap_0_1(to), op, op_label, pre);
+        auto [from, to, op, op_label, pre, weight] = seed_to_rule(seed);
+        return rule_to_seed(swap_0_1(from), swap_0_1(to), op, op_label, pre, weight);
     };
     auto rule_swap_label = [&seed_to_rule,&rule_to_seed,&swap_0_1](size_t seed) -> size_t {
-        auto [from, to, op, op_label, pre] = seed_to_rule(seed);
-        return rule_to_seed(from, to, op, op_label ? std::make_optional(swap_0_1(op_label.value())) : op_label, swap_0_1(pre));
+        auto [from, to, op, op_label, pre, weight] = seed_to_rule(seed);
+        return rule_to_seed(from, to, op, op_label ? std::make_optional(swap_0_1(op_label.value())) : op_label, swap_0_1(pre), weight);
     };
     auto rule_swap_both = [&seed_to_rule,&rule_to_seed,&swap_0_1](size_t seed) -> size_t {
-        auto [from, to, op, op_label, pre] = seed_to_rule(seed);
-        return rule_to_seed(swap_0_1(from), swap_0_1(to), op, op_label ? std::make_optional(swap_0_1(op_label.value())) : op_label, swap_0_1(pre));
+        auto [from, to, op, op_label, pre, weight] = seed_to_rule(seed);
+        return rule_to_seed(swap_0_1(from), swap_0_1(to), op, op_label ? std::make_optional(swap_0_1(op_label.value())) : op_label, swap_0_1(pre), weight);
     };
 
 //    std::vector<TypedPDA<char>> pdas;
@@ -360,7 +460,7 @@ void generate_pda_without_symmetries(const fs::path& output_dir) {
                 pda_set.emplace(rules);
             }
 
-            generated_pda_t pda(all_labels);
+            generated_pda_t<with_weight> pda(all_labels);
             pda.insert_state("p0");
             pda.insert_state("p1");
             for (size_t rule : rules) {
@@ -401,8 +501,9 @@ void generate_pda_without_symmetries(const fs::path& output_dir) {
 
 }
 
+template<bool with_weight = false>
 void generate_pautomata_without_symmetries(const fs::path& output_dir, bool initial) {
-    generated_pda_t pda;
+    generated_pda_t<with_weight> pda;
     pda.insert_label("A");
     pda.insert_label("B");
     pda.insert_state("p0");
@@ -429,7 +530,7 @@ void generate_pautomata_without_symmetries(const fs::path& output_dir, bool init
     auto trans_to_seed = [num_states,num_extra_states,num_labels,all_transitions](size_t from, size_t to, size_t label){
         return (from * num_extra_states + (to - num_states)) * num_labels + label;
     };
-    auto add_transition = [&seed_to_trans](size_t seed, pda_to_pautomaton_t<generated_pda_t>& automaton){
+    auto add_transition = [&seed_to_trans](size_t seed, pda_to_pautomaton_t<generated_pda_t<with_weight>>& automaton){
         auto [from, to, label] = seed_to_trans(seed);
         automaton.add_edge(from, to, label);
     };
@@ -568,10 +669,12 @@ int main(int argc, const char** argv) {
     po::options_description output("Output Options");
     size_t seed = std::random_device()(); // Default to a random seed. Overwritten if -s option is set.
     size_t number_of_instances = 1;
+    bool with_weight = false;
 //    size_t begin_from_instance = 0;
     input.add_options()
             ("seed,s", po::value<size_t>(&seed), "Seed for random number generator (use a random_device if not set)")
             ("instances,n", po::value<size_t>(&number_of_instances), "Number of instances to generate (default=1)")
+            ("weight,w", po::bool_switch(&with_weight), "Generate weighted PDA (default=false) only supported for --random")
 //            ("from,f", po::value<size_t>(&begin_from_instance), "Start generating from this instance number - to support chunking (default=0)")
             ;
 //    bool no_parser_warnings = false;
@@ -610,11 +713,21 @@ int main(int argc, const char** argv) {
         return 1;
     }
     if (gen_random) {
-        generate_many(random_gen, output_dir_path, number_of_instances);
+        if (with_weight) {
+            generate_many<true>(random_gen, output_dir_path, number_of_instances);
+        } else {
+            generate_many<false>(random_gen, output_dir_path, number_of_instances);
+        }
     } else {
-        generate_pda_without_symmetries(output_dir_path);
-        generate_pautomata_without_symmetries(output_dir_path, true);
-        generate_pautomata_without_symmetries(output_dir_path, false);
+        if (with_weight) {
+            generate_pda_without_symmetries<true>(output_dir_path);
+            generate_pautomata_without_symmetries<true>(output_dir_path, true);
+            generate_pautomata_without_symmetries<true>(output_dir_path, false);
+        } else {
+            generate_pda_without_symmetries<false>(output_dir_path);
+            generate_pautomata_without_symmetries<false>(output_dir_path, true);
+            generate_pautomata_without_symmetries<false>(output_dir_path, false);
+        }
     }
 
 //    if (output_file.empty() || output_file == "-") {
