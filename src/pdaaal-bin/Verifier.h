@@ -107,7 +107,6 @@ namespace pdaaal {
                     result = Solver::post_star_accepts<Trace_Type::Shortest>(instance);
                     if (result) {
                         typename pda_t::weight_type weight;
-                        using W = typename pda_t::weight;
                         std::vector<typename pda_t::tracestate_t> trace;
                         std::tie(trace, weight) = Solver::get_trace<Trace_Type::Shortest>(instance);
                         j_weight = weight;

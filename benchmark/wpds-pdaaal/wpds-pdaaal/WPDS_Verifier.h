@@ -29,8 +29,19 @@
 
 #include <pdaaal/PDAFactory.h>
 // WPDS include must come after pdaaal include. Because otherwise we get compile errors in abseil, yeah...%&#!¤#
+// WPDS throws many warnings with -Wpedantic etc., so ignore for those files.
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wignored-qualifiers"
 #include <WPDS.h>
 #include <ref_ptr.h>
+#pragma GCC diagnostic pop
+#else
+#include <WPDS.h>
+#include <ref_ptr.h>
+#endif
 #include <utility>
 
 
@@ -230,7 +241,7 @@ namespace wpds_pdaaal {
                   _s(s), _answer(_s) {};
         template<typename automaton_t>
         WPDS_SolverInstance(wpds::WPDS<W>& pda, const automaton_t& initial, const automaton_t& final, size_t max_pda_state, wpds::Semiring<W>& s)
-                : _pda(pda), _initial(make_CA(initial, max_pda_state, s)), _final(make_CA(final, max_pda_state, s)), _s(s), _answer(_s) {};
+                : _pda(pda), _initial(make_CA(initial, max_pda_state, s)), _final(make_CA(final, max_pda_state, s)), _s(s), _answer(_s) {}
 
         template<typename automaton_t>
         static wpds::CA<W> make_CA(const automaton_t& p_automaton, size_t max_pda_state, wpds::Semiring<W>& s) {
