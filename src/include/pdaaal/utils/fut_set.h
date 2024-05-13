@@ -112,6 +112,14 @@ namespace pdaaal::fut {
             const_iterator find(const Head &head) const { return elems.find(head); }
             iterator find(const Head &head) { return elems.find(head); }
 
+            iterator erase(const_iterator first, const_iterator last) {
+                return elems.erase(first, last);
+            }
+            template<class Pred>
+            auto erase_if(Pred pred) {
+                return std::erase_if(elems, pred);
+            }
+
         private:
             container_type elems;
         };
@@ -160,5 +168,13 @@ namespace pdaaal::fut {
     using set = typename detail::fut_set<T, C...>;
 
 }
+
+/*namespace std {
+    template<typename Head, typename... Tail, pdaaal::fut::type CHead, pdaaal::fut::type CNeck, pdaaal::fut::type... CTail, class Pred>
+    auto std::erase_if(pdaaal::fut::detail::fut_set<std::tuple<Head, Tail...>, CHead, CNeck, CTail...>& c, Pred pred) {
+        return c.erase_if(pred);
+    }
+}*/
+
 
 #endif //PDAAAL_FUT_SET_H

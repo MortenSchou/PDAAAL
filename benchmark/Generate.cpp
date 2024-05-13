@@ -151,6 +151,7 @@ generated_automaton_t<with_weight> generate_pautomaton(const generated_pda_t<wit
     for (size_t i = 0; i < num_transitions; ++i) {
         debug << add_transition(distrib(random_gen)) << std::endl;
     }
+    automaton.remove_redundant();
     return automaton;
 }
 
@@ -192,41 +193,48 @@ bool to_isabelle(std::ostream& out, const pda_t& pda, pda_to_pautomaton_t<pda_t>
     return answer;
 }
 
+template<typename instance_t>
+json get_json(const instance_t& instance) {
+    json result;
+    result["instance"] = instance;
+    return result;
+}
+
 enum class engine_t {prestar, poststar, dualstar};
-template<typename pda_t>
-bool solve(const pda_t& pda, pda_to_pautomaton_t<pda_t> initial_automaton, pda_to_pautomaton_t<pda_t> final_automaton, engine_t engine) {
-    PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
+template<typename instance_t>
+bool solve(const instance_t& instance, engine_t engine) {
+    auto instance_copy = instance.copy();
     switch (engine) {
         case engine_t::prestar:
-            return Solver::pre_star_accepts<Trace_Type::None>(instance);
+            return Solver::pre_star_accepts<Trace_Type::None>(instance_copy);
         case engine_t::poststar:
-            return Solver::post_star_accepts<Trace_Type::None>(instance);
+            return Solver::post_star_accepts<Trace_Type::None>(instance_copy);
         case engine_t::dualstar:
         default:
-            return Solver::dual_search_accepts<Trace_Type::None>(instance);
+            return Solver::dual_search_accepts<Trace_Type::None>(instance_copy);
     }
 }
-template<typename pda_t>
-std::optional<typename pda_t::weight_type> solve_w(const pda_t& pda, pda_to_pautomaton_t<pda_t> initial_automaton, pda_to_pautomaton_t<pda_t> final_automaton, engine_t engine) {
-    static_assert(pda_t::has_weight, "Can only solve weight on weighted PDA.");
-    PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
+template<typename instance_t>
+std::optional<typename instance_t::pda_t::weight_type> solve_w(const instance_t& instance, engine_t engine) {
+    static_assert(instance_t::pda_t::has_weight, "Can only solve weight on weighted PDA.");
+    auto instance_copy = instance.copy();
     switch (engine) {
         case engine_t::prestar:
-            if (Solver::pre_star_accepts<Trace_Type::Shortest>(instance)) {
-                return Solver::get_trace<Trace_Type::Shortest>(instance).second;
+            if (Solver::pre_star_accepts<Trace_Type::Shortest>(instance_copy)) {
+                return Solver::get_trace<Trace_Type::Shortest>(instance_copy).second;
             } else {
                 return std::nullopt;
             }
         case engine_t::poststar:
-            if (Solver::post_star_accepts<Trace_Type::Shortest>(instance)) {
-                return Solver::get_trace<Trace_Type::Shortest>(instance).second;
+            if (Solver::post_star_accepts<Trace_Type::Shortest>(instance_copy)) {
+                return Solver::get_trace<Trace_Type::Shortest>(instance_copy).second;
             } else {
                 return std::nullopt;
             }
         case engine_t::dualstar:
         default:
-            if (Solver::dual_search_accepts<Trace_Type::Shortest>(instance)) {
-                return Solver::get_trace_dual_search<Trace_Type::Shortest>(instance).second;
+            if (Solver::dual_search_accepts<Trace_Type::Shortest>(instance_copy)) {
+                return Solver::get_trace_dual_search<Trace_Type::Shortest>(instance_copy).second;
             } else {
                 return std::nullopt;
             }
@@ -295,20 +303,21 @@ void generate_many(std::mt19937& random_gen, const fs::path& output_dir, size_t 
         auto pda = generate_pda<with_weight>(4, 5, i%200, random_gen, dummy, i%19);
         auto initial_automaton = generate_pautomaton<with_weight>(pda, 3, i%13, random_gen, dummy);
         auto final_automaton = generate_pautomaton<with_weight>(pda, 2, i%11, random_gen, dummy);
+        PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
 
-
-        print_json(pda.to_json(), output_dir, "pda", i);
-        print_json(initial_automaton.to_json(), output_dir, "initial", i);
-        print_json(final_automaton.to_json(), output_dir, "final", i);
+        print_json(get_json(instance), output_dir, "instance", i);
+//        print_json(pda.to_json(), output_dir, "pda", i);
+//        print_json(initial_automaton.to_json(), output_dir, "initial", i);
+//        print_json(final_automaton.to_json(), output_dir, "final", i);
 
         std::vector<bool> answers;
         std::vector<uint32_t> weights;
         engine_t engines[] = {engine_t::prestar, engine_t::poststar, engine_t::dualstar};
         for (auto engine : engines) {
-            bool answer = solve(pda, initial_automaton, final_automaton, engine);
+            bool answer = solve(instance, engine);
             answers.push_back(answer);
             if constexpr (with_weight) {
-                std::optional<uint32_t> weight = solve_w(pda, initial_automaton, final_automaton, engine);
+                std::optional<uint32_t> weight = solve_w(instance, engine);
                 answers.push_back(weight.has_value());
                 if (weight.has_value()) {
                     weights.push_back(weight.value());
@@ -319,14 +328,12 @@ void generate_many(std::mt19937& random_gen, const fs::path& output_dir, size_t 
         if (has_different_elements(weights)) std::cout << "WHOOPS: Different weights on case " << i << ". " << vector_printer() << weights << std::endl;
 
         // Get statistics
-        bool answer = solve(pda, initial_automaton, final_automaton, engine_t::prestar);
+        bool answer = solve(instance, engine_t::prestar);
         if constexpr (with_weight) {
-            auto weight = solve_w(pda, initial_automaton, final_automaton, engine_t::prestar);
+            auto weight = solve_w(instance, engine_t::prestar);
             if (weight.has_value()) weight_counts[weight.value()]++;
         }
 
-
-        PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
         instance.enable_pre_star();
         if (instance.initialize_product()) { count_already_intersecting++; }
         if (answer) { count_p++; } else { count_n++; }

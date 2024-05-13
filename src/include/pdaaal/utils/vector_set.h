@@ -157,6 +157,9 @@ namespace pdaaal::fut {
             elems.resize(count);
         };
         void clear() noexcept { elems.clear(); };
+        iterator erase(const_iterator first, const_iterator last) {
+            return elems.erase(first, last);
+        }
 
         auto lower_bound(const Key& key) const {
             return std::lower_bound(elems.begin(), elems.end(), key);
@@ -237,6 +240,9 @@ namespace pdaaal::fut {
             elems.resize(count);
         };
         void clear() noexcept { elems.clear(); };
+        iterator erase(const_iterator first, const_iterator last) {
+            return elems.erase(first, last);
+        }
 
         auto lower_bound(const Key& key) const {
             return std::lower_bound(elems.begin(), elems.end(), key, less);

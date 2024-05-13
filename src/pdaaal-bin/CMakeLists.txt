@@ -1,10 +1,24 @@
 cmake_minimum_required(VERSION 3.14)
 project(PDAAAL-bin VERSION ${PDAAAL_VERSION} LANGUAGES CXX)
 
+
+add_library(pdaaal-parsing)
+target_sources(pdaaal-parsing
+    PRIVATE parsing/Parsing.cpp
+    PUBLIC  ${HEADER_FILES}
+)
+target_include_directories(pdaaal-parsing PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+target_link_libraries(pdaaal-parsing
+        PRIVATE pdaaal
+        Boost::program_options
+)
+
 # Local definition of source files.
 set(PDAAAL_BIN_SOURCE_FILES
     main.cpp
-    parsing/Parsing.cpp
 )
 # The following writes a Git hash at build time to a header file that is then included by main.cpp
 # We also include the PDAAAL_VERSION number as defined in the top-level cmake file.
@@ -42,7 +56,7 @@ target_sources(pdaaal-bin
                 ${CMAKE_CURRENT_BINARY_DIR}/version.h
 )
 target_link_libraries(pdaaal-bin
-        PRIVATE pdaaal
+        PRIVATE pdaaal-parsing pdaaal
                 wpds-pdaaal::wpds-pdaaal
                 Boost::program_options
 )

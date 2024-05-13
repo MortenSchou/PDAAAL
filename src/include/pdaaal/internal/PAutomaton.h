@@ -660,8 +660,7 @@ namespace pdaaal::internal {
             return !_accepting.empty();
         };
         template<Trace_Type trace_type = Trace_Type::Shortest>
-        const weight_or_bool_t&
-        min_accepting_weight() const {
+        const weight_or_bool_t& min_accepting_weight() const {
             if constexpr (W::is_weight) {
                 static const auto max = solver_weight<W,trace_type>::max();
                 if (_accepting.empty()) return max;
@@ -837,6 +836,68 @@ namespace pdaaal::internal {
         static constexpr trace_t new_post_trace(size_t epsilon_state) {
             return trace_t(epsilon_state);
         }
+
+//        virtual void remove_state(size_t state_id) {
+//
+//        }
+        // Remove states and edges that are not on a path from initial to accepting.
+        void remove_redundant() {
+            // Find states not on path from initial to accepting.
+            // First find reachable from initial
+            std::vector<state_t*> queue = _initial;
+            std::unordered_set<state_t*> seen(_initial.begin(), _initial.end());
+            while(!queue.empty()) {
+                auto state = queue.back();
+                queue.pop_back();
+                for (const auto &[to,labels] : state->_edges) {
+                    assert(!labels.empty());
+                    if (seen.emplace(_states[to].get()).second) {
+                        queue.emplace_back(_states[to].get());
+                    }
+                }
+            }
+            std::vector<state_t*> reachable_accepting_temp;
+            std::vector<state_t*> reachable_non_accepting;
+            std::partition_copy(seen.begin(), seen.end(), std::back_inserter(reachable_accepting_temp),
+                                std::back_inserter(reachable_non_accepting),
+                                [](const state_t* state){ return state->_accepting; });
+            std::unordered_set<state_t*> can_reach_accepting(reachable_accepting_temp.begin(), reachable_accepting_temp.end());
+            // Next incrementally build set of reachable states that can reach an accepting states (going backwards one step at a time).
+            // Not the most efficient, but it will do...
+            bool change = false;
+            while(change) {
+                std::vector<state_t*> new_reachable_accepting;
+                std::vector<state_t*> reachable_non_accepting_temp;
+                std::partition_copy(
+                        reachable_non_accepting.begin(), reachable_non_accepting.end(),
+                        std::back_inserter(new_reachable_accepting), std::back_inserter(reachable_non_accepting_temp),
+                        [&can_reach_accepting,this](const state_t* state){
+                            return std::any_of(state->_edges.begin(), state->_edges.end(),
+                                               [&can_reach_accepting,this](const auto& edge){ return can_reach_accepting.contains(_states[edge.first].get()); });
+                        }
+                );
+                if (!new_reachable_accepting.empty()) {
+                    change = true;
+                    can_reach_accepting.insert(new_reachable_accepting.begin(), new_reachable_accepting.end());
+                }
+                std::swap(reachable_non_accepting, reachable_non_accepting_temp);
+            }
+
+            // We do not remove initial states (property of PAutomaton relative to its PDA), but remove other states not in
+            // Remove bad states and edges to those states.
+            std::erase_if(_accepting, [&can_reach_accepting](const auto& state){ return !can_reach_accepting.contains(state); });
+            for (size_t i = _initial.size(); i < _states.size(); ++i) {
+                if (!can_reach_accepting.contains(_states[i].get())) {
+                    _states[i]->_edges.clear(); // It is too tricky to remove states, so we just remove all their edges.
+                }
+            }
+//            _states.erase(std::remove_if(_states.begin() + _initial.size(), _states.end(),
+//                                         [&can_reach_accepting](const auto& state){ return !can_reach_accepting.contains(state.get()); }), _states.end());
+            for (auto& state : _states) {
+                state->_edges.erase_if([&can_reach_accepting,this](const auto& edge){ return !can_reach_accepting.contains(_states[edge.first].get()); });
+            }
+        }
+
     protected:
         template<typename T, bool use_mapping = true, bool use_new_state_action = false>
         void construct(const NFA<T>& nfa, const std::vector<size_t>& states, const std::function<std::vector<uint32_t>(const typename NFA<T>::edge_t&)>& map_edge,
