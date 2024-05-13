@@ -176,7 +176,12 @@ namespace pdaaal::internal {
                         } else throw std::logic_error("Shortest traces for void-weights is not supported.");
                     }
                 }
-                if(from->_accepting) add_pop(from->_id);
+                if(from->_accepting) {
+                    if constexpr (W::is_weight && SHORTEST) {
+                        _minpath[from->_id] = solver_weight::zero();
+                    }
+                    add_pop(from->_id);
+                }
             }
         }
 
