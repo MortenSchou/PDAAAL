@@ -83,7 +83,7 @@ namespace pdaaal {
 
         template <Trace_Type trace_type,typename pda_t, typename automaton_t, typename W>
         static bool dual_search_accepts(PAutomatonProduct<pda_t,automaton_t,W>& instance) {
-            if (instance.template initialize_product<true>()) {
+            if (instance.template initialize_product<true,true,trace_type>()) {
                 return true;
             }
             // we could *probably* avoid some dupplication here if the pre/post* algorithms
@@ -181,7 +181,7 @@ namespace pdaaal {
         template <Trace_Type trace_type = Trace_Type::Any, typename pda_t, typename automaton_t, typename W>
         static bool pre_star_accepts(PAutomatonProduct<pda_t,automaton_t,W>& instance) {
             instance.enable_pre_star();
-            return instance.initialize_product() ||
+            return instance.template initialize_product<false,true,trace_type>() ||
                    pre_star<trace_type,W,true>(instance.automaton(), [&instance](size_t from, uint32_t label, size_t to, internal::edge_annotation_t<W> trace, const auto& et_param) -> bool {
                         if constexpr (is_weighted<W> && trace_type == Trace_Type::Shortest)
                             return instance.template add_edge_product<true,trace_type>(from, label, to, trace, et_param);
