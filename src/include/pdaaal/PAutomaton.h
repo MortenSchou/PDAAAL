@@ -139,6 +139,7 @@ namespace pdaaal {
     void to_json_impl(json& j, const PAutomaton<label_t,W,state_t,skip_state_mapping,trace_info_type>& automaton) {
         j = json::object();
         size_t num_pda_states = automaton.pda().states().size();
+        json j_accepting = json::array();
         json j_edges = json::array();
         for (const auto& state : automaton.states()) {
             json j_from;
@@ -157,7 +158,7 @@ namespace pdaaal {
                 }
             }
             if (state->_accepting) {
-                j["accepting"].emplace_back(j_from);
+                j_accepting.emplace_back(j_from);
             }
             for (const auto& [to, labels] : state->_edges) {
                 json j_to;
@@ -178,6 +179,7 @@ namespace pdaaal {
                 }
             }
         }
+        j["accepting"] = j_accepting;
         j["edges"] = j_edges;
     }
     template<typename label_t, typename W, typename state_t, bool skip_state_mapping, TraceInfoType trace_info_type>
