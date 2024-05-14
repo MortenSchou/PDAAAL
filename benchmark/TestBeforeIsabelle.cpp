@@ -190,6 +190,7 @@ void run(instance_t& instance, size_t pds_id, size_t initial_id, size_t final_id
     std::stringstream pds_name; pds_name << "pds_rules_" << pds_id;
     std::stringstream initial_name; initial_name << "initial_" << initial_id;
     std::stringstream final_name; final_name << "final_" << final_id;
+    std::stringstream lemma_name; lemma_name << "p" << pds_id << "i" << initial_id << "f" << final_id;
     if (full) {
         IsabellePrettyPrinter isabelle_pp(std::cout);
         isabelle_pp.print_begin();
@@ -202,10 +203,9 @@ void run(instance_t& instance, size_t pds_id, size_t initial_id, size_t final_id
         IsabellePrettyPrinter isabelle_pp(std::cout);
         isabelle_pp.print_begin("WExInstances", "WExSetup");
         isabelle_pp.print_instance(instance.pda(), instance.initial_automaton(), instance.final_automaton(), "l", pds_name.str(), initial_name.str(), final_name.str());
-        print_lemmas<instance_t>(answer_pre, answer_post, answer_dual, "correctness_check", pds_name.str(), initial_name.str(), final_name.str());
+        print_lemmas<instance_t>(answer_pre, answer_post, answer_dual, lemma_name.str(), pds_name.str(), initial_name.str(), final_name.str());
         isabelle_pp.print_end();
     } else {
-        std::stringstream lemma_name; lemma_name << "p" << pds_id << "i" << initial_id << "f" << final_id;
         print_lemmas<instance_t>(answer_pre, answer_post, answer_dual, lemma_name.str(), pds_name.str(), initial_name.str(), final_name.str());
     }
 }
