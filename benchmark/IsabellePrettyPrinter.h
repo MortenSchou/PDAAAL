@@ -389,9 +389,14 @@ end
         }
         return _out;
     }
-    template<typename rule_t>
+    template<typename pda_t, typename rule_t>
     std::ostream& print_rule(const rule_t& rule, const std::string& label_prefix = "") {
-        _out << "((p" << rule._from << ", " << label_prefix << rule._pre << "), (p" << rule._to << ", ";
+        _out << "((p" << rule._from << ", " << label_prefix << rule._pre << "), ";
+        if constexpr (pda_t::has_weight) {
+            _out << "fin ";
+            pda_t::weight::print(_out, rule._weight) << ", ";
+        }
+        _out << "(p" << rule._to << ", ";
         switch (rule._op) {
             case pdaaal::POP:
                 _out << "pop";
@@ -416,12 +421,18 @@ end
     template<typename pda_t>
     std::ostream& print_rules(const std::string& name, const pda_t& pda, const std::string& label_prefix = "") {
         auto rules = pda.all_rules();
-        _out << "definition " << name << " :: \"(ctr_loc, label) rule set\" where" << std::endl;
+        if constexpr (pda_t::has_weight) {
+            _out << "definition " << name << " :: \"(ctr_loc, label, nat_inf) w_rule list\" where" << std::endl;
+        } else {
+            _out << "definition " << name << " :: \"(ctr_loc, label) rule set\" where" << std::endl;
+        }
+        _out << "  \"" << name << " = "; if constexpr (pda_t::has_weight) _out << '['; else _out << '{';
         if (rules.empty()) {
-            _out << "  \"" << name << " = {}\"" << std::endl;
+            if constexpr (pda_t::has_weight) _out << ']'; else _out << '}';
+            _out << "\"" << std::endl;
             return _out;
         }
-        _out << "  \"" << name << " = {" << std::endl;
+        _out << std::endl;
         bool first_rule = true;
         for (const auto& rule : rules) {
             if (first_rule) {
@@ -429,19 +440,10 @@ end
             } else {
                 _out << "," << std::endl;
             }
-            _out << "  "; print_rule(rule, label_prefix);
+            _out << "  "; print_rule<pda_t>(rule, label_prefix);
         }
-        _out << "}\"" << std::endl;
-
-        if constexpr (pda_t::has_weight) {
-            _out << "definition " << name << "_W :: \"(ctr_loc, label) rule => nat_inf\" where" << std::endl;
-            _out << "  \"" << name << "_W rule = (K$ infinity)" << std::endl;
-            for (const auto& rule : rules) {
-                _out << "  ("; print_rule(rule, label_prefix) << " $:= fin ";
-                pda_t::weight::print(_out, rule._weight) << ")" << std::endl;
-            }
-            _out << "   $ rule\"" << std::endl;
-        }
+        if constexpr (pda_t::has_weight) _out << ']'; else _out << '}';
+        _out << "\"" << std::endl;
         return _out;
     }
     template<typename pda_t>

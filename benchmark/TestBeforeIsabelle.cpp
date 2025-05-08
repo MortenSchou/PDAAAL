@@ -123,7 +123,7 @@ void print_lemmas(const answer_t<instance_t>& answer_pre, const answer_t<instanc
 //    lemma_content << "  \"check " << pda_name << " " << initial_name << "_automaton " << initial_name << "_ctr_loc " << initial_name << "_ctr_loc_st" << std::endl
 //                  << "                   " << final_name << "_automaton " << final_name << "_ctr_loc " << final_name << "_ctr_loc_st = Some ";
 
-    lemma_content << "  \"check " << pda_name <<  " " << pda_name <<  "_W " << initial_name << "_automaton " << final_name << "_automaton "
+    lemma_content << "  \"check " << pda_name <<  " " << initial_name << "_automaton " << final_name << "_automaton "
                   << initial_name << "_finals " << final_name << "_finals = Some ";
 
     if (answer_pre == answer_post) {
