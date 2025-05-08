@@ -180,18 +180,18 @@ void print_rules_simple(std::ostream& out, const PDA<char>& pda) {
     out << "Count rules: " << rules.size() << std::endl;
 }
 
-template<typename pda_t>
-bool to_isabelle(std::ostream& out, const pda_t& pda, pda_to_pautomaton_t<pda_t> initial_automaton, pda_to_pautomaton_t<pda_t> final_automaton) {
-    IsabellePrettyPrinter isabelle_pp(out);
-    isabelle_pp.print_begin();
-    isabelle_pp.print_query(pda, initial_automaton, final_automaton);
-    isabelle_pp.print_proofs();
-    PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
-    bool answer = Solver::pre_star_accepts(instance);
-    isabelle_pp.print_lemma(answer);
-    isabelle_pp.print_end();
-    return answer;
-}
+// template<typename pda_t>
+// bool to_isabelle(std::ostream& out, const pda_t& pda, pda_to_pautomaton_t<pda_t> initial_automaton, pda_to_pautomaton_t<pda_t> final_automaton) {
+//     IsabellePrettyPrinter isabelle_pp(out);
+//     isabelle_pp.print_begin();
+//     isabelle_pp.print_query(pda, initial_automaton, final_automaton);
+//     isabelle_pp.print_proofs();
+//     PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
+//     bool answer = Solver::pre_star_accepts(instance);
+//     isabelle_pp.print_lemma(answer);
+//     isabelle_pp.print_end();
+//     return answer;
+// }
 
 template<typename instance_t>
 json get_json(const instance_t& instance) {
@@ -242,32 +242,32 @@ std::optional<typename instance_t::pda_t::weight_type> solve_w(const instance_t&
 }
 
 
-void generate(std::ostream& out, std::mt19937& random_gen, bool debug_info
-#ifndef NDEBUG
-        = true
-#else
-        = false
-#endif
-        ) {
-    std::stringstream dummy;
-
-    // Generate
-    auto pda = generate_pda(2, 2, 2, random_gen, debug_info ? out : dummy);
-    auto initial_automaton = generate_pautomaton(pda, 2, 2, random_gen, debug_info ? out : dummy);
-    auto final_automaton = generate_pautomaton(pda, 1, 2, random_gen, debug_info ? out : dummy);
-
-    // Print in Isabelle format (also calculates answer).
-    bool answer = to_isabelle(out, pda, initial_automaton, final_automaton);
-
-    // Variables for statistics
-    size_t count_p = 0, count_n = 0, count_already_intersecting = 0;
-
-    // Get statistics
-    PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
-    instance.enable_pre_star();
-    if (instance.initialize_product()) { count_already_intersecting++; }
-    if (answer) { count_p++; } else { count_n++; }
-}
+// void generate(std::ostream& out, std::mt19937& random_gen, bool debug_info
+// #ifndef NDEBUG
+//         = true
+// #else
+//         = false
+// #endif
+//         ) {
+//     std::stringstream dummy;
+//
+//     // Generate
+//     auto pda = generate_pda(2, 2, 2, random_gen, debug_info ? out : dummy);
+//     auto initial_automaton = generate_pautomaton(pda, 2, 2, random_gen, debug_info ? out : dummy);
+//     auto final_automaton = generate_pautomaton(pda, 1, 2, random_gen, debug_info ? out : dummy);
+//
+//     // Print in Isabelle format (also calculates answer).
+//     bool answer = to_isabelle(out, pda, initial_automaton, final_automaton);
+//
+//     // Variables for statistics
+//     size_t count_p = 0, count_n = 0, count_already_intersecting = 0;
+//
+//     // Get statistics
+//     PAutomatonProduct instance(pda, std::move(initial_automaton), std::move(final_automaton));
+//     instance.enable_pre_star();
+//     if (instance.initialize_product()) { count_already_intersecting++; }
+//     if (answer) { count_p++; } else { count_n++; }
+// }
 
 void print_json(const json& j, const fs::path& output_dir, const std::string& name, size_t index) {
     std::stringstream file_name;
