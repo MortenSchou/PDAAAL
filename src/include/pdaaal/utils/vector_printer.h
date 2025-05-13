@@ -32,6 +32,15 @@
 #include <utility>
 #include <vector>
 
+namespace std_future {
+    template<class T, template<class...> class Primary> struct is_specialization_of : std::false_type {};
+    template<template<class...> class Primary , class... Args > struct is_specialization_of< Primary<Args...>, Primary> : std::true_type {};
+    template<class T, template<class...> class Primary> inline constexpr bool is_specialization_of_v = is_specialization_of<T, Primary>::value;
+
+    template<class T> using is_vector = is_specialization_of<T, std::vector>;
+    template<class T> inline constexpr bool is_vector_v = is_specialization_of_v<T, std::vector>;
+}
+
 namespace pdaaal {
     class vector_printer {
     public:
@@ -55,7 +64,11 @@ namespace pdaaal {
             for (auto&& elem : v) {
                 if (first) first = false;
                 else vp._o << vp._separator;
-                vp._o << elem;
+                if constexpr (std_future::is_vector_v<T>) {
+                    vp._o << vector_printer() << elem;
+                } else {
+                    vp._o << elem;
+                }
             }
             vp._o << vp._end;
             return vp._o;
