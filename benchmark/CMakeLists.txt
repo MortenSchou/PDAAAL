@@ -13,3 +13,7 @@ target_link_libraries(test-before-isabelle PRIVATE pdaaal-parsing pdaaal Boost::
 add_executable(delta-debug)
 target_sources(delta-debug PRIVATE DeltaDebug.cpp)
 target_link_libraries(delta-debug PRIVATE nlohmann_json::nlohmann_json Boost::program_options)
+
+add_executable(diff-test)
+target_sources(diff-test PRIVATE DiffTest.cpp)
+target_link_libraries(diff-test PRIVATE pdaaal-parsing pdaaal Boost::program_options)

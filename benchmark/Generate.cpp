@@ -32,14 +32,12 @@
 #include <iostream>
 #include <filesystem>
 #include <boost/program_options.hpp>
-#include <pdaaal/Solver.h>
-#include <pdaaal/PAutomaton.h>
 
+#include "DiffTest.h"
 #include "IsabellePrettyPrinter.h"
 
 namespace fs = std::filesystem;
 namespace po = boost::program_options;
-using namespace pdaaal;
 
 template<bool with_weight>
 using generated_pda_t = PDA<std::string,std::conditional_t<with_weight,weight<uint32_t>,weight<void>>,fut::type::vector,std::string>;
@@ -200,46 +198,6 @@ json get_json(const instance_t& instance) {
     return result;
 }
 
-enum class engine_t {prestar, poststar, dualstar};
-template<typename instance_t>
-bool solve(const instance_t& instance, engine_t engine) {
-    auto instance_copy = instance.copy();
-    switch (engine) {
-        case engine_t::prestar:
-            return Solver::pre_star_accepts<Trace_Type::None>(instance_copy);
-        case engine_t::poststar:
-            return Solver::post_star_accepts<Trace_Type::None>(instance_copy);
-        case engine_t::dualstar:
-        default:
-            return Solver::dual_search_accepts<Trace_Type::None>(instance_copy);
-    }
-}
-template<typename instance_t>
-std::optional<typename instance_t::pda_t::weight_type> solve_w(const instance_t& instance, engine_t engine) {
-    static_assert(instance_t::pda_t::has_weight, "Can only solve weight on weighted PDA.");
-    auto instance_copy = instance.copy();
-    switch (engine) {
-        case engine_t::prestar:
-            if (Solver::pre_star_accepts<Trace_Type::Shortest>(instance_copy)) {
-                return Solver::get_trace<Trace_Type::Shortest>(instance_copy).second;
-            } else {
-                return std::nullopt;
-            }
-        case engine_t::poststar:
-            if (Solver::post_star_accepts<Trace_Type::Shortest>(instance_copy)) {
-                return Solver::get_trace<Trace_Type::Shortest>(instance_copy).second;
-            } else {
-                return std::nullopt;
-            }
-        case engine_t::dualstar:
-        default:
-            if (Solver::dual_search_accepts<Trace_Type::Shortest>(instance_copy)) {
-                return Solver::get_trace_dual_search<Trace_Type::Shortest>(instance_copy).second;
-            } else {
-                return std::nullopt;
-            }
-    }
-}
 
 
 // void generate(std::ostream& out, std::mt19937& random_gen, bool debug_info
@@ -282,14 +240,6 @@ void print_json(const json& j, const fs::path& output_dir, const std::string& na
     out_stream << j.dump() << std::endl;
 }
 
-template<typename T>
-bool has_different_elements(std::vector<T> v) {
-    for(size_t i = 1; i < v.size(); ++i) {
-        if (v[i] != v[i-1]) return true;
-    }
-    return false;
-}
-
 template<bool with_weight = false>
 void generate_many(std::mt19937& random_gen, const fs::path& output_dir, size_t number_of_instances) {
     std::stringstream dummy;
@@ -310,20 +260,7 @@ void generate_many(std::mt19937& random_gen, const fs::path& output_dir, size_t 
 //        print_json(initial_automaton.to_json(), output_dir, "initial", i);
 //        print_json(final_automaton.to_json(), output_dir, "final", i);
 
-        std::vector<bool> answers;
-        std::vector<uint32_t> weights;
-        engine_t engines[] = {engine_t::prestar, engine_t::poststar, engine_t::dualstar};
-        for (auto engine : engines) {
-            bool answer = solve(instance, engine);
-            answers.push_back(answer);
-            if constexpr (with_weight) {
-                std::optional<uint32_t> weight = solve_w(instance, engine);
-                answers.push_back(weight.has_value());
-                if (weight.has_value()) {
-                    weights.push_back(weight.value());
-                }
-            }
-        }
+        auto [answers, weights] = diff_test(instance);
         if (has_different_elements(answers)) std::cout << "WHOOPS: Different answers on case " << i << ". " << vector_printer() << answers << std::endl;
         if (has_different_elements(weights)) std::cout << "WHOOPS: Different weights on case " << i << ". " << vector_printer() << weights << std::endl;
 
@@ -331,7 +268,7 @@ void generate_many(std::mt19937& random_gen, const fs::path& output_dir, size_t 
         bool answer = solve(instance, engine_t::prestar);
         if constexpr (with_weight) {
             auto weight = solve_w(instance, engine_t::prestar);
-            if (weight.has_value()) weight_counts[weight.value()]++;
+            if (weight.has_value()) ++weight_counts[weight.value()];
         }
 
         instance.enable_pre_star();

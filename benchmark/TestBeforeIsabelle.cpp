@@ -29,55 +29,13 @@
 #include <iostream>
 #include <filesystem>
 #include <boost/program_options.hpp>
-#include <pdaaal/Solver.h>
-#include <pdaaal/PAutomaton.h>
+#include "DiffTest.h"
 #include "IsabellePrettyPrinter.h"
 #include "../src/pdaaal-bin/parsing/Parsing.h"
 
 namespace fs = std::filesystem;
 namespace po = boost::program_options;
 using namespace pdaaal;
-
-enum class engine_t {prestar, poststar, dualstar};
-template<typename instance_t>
-bool solve(const instance_t& instance, engine_t engine) {
-    auto instance_copy = instance.copy();
-    switch (engine) {
-        case engine_t::prestar:
-            return Solver::pre_star_accepts<Trace_Type::None>(instance_copy);
-        case engine_t::poststar:
-            return Solver::post_star_accepts<Trace_Type::None>(instance_copy);
-        case engine_t::dualstar:
-        default:
-            return Solver::dual_search_accepts<Trace_Type::None>(instance_copy);
-    }
-}
-template<typename instance_t>
-std::optional<typename instance_t::pda_t::weight_type> solve_w(const instance_t& instance, engine_t engine) {
-    static_assert(instance_t::pda_t::has_weight, "Can only solve weight on weighted PDA.");
-    auto instance_copy = instance.copy();
-    switch (engine) {
-        case engine_t::prestar:
-            if (Solver::pre_star_accepts<Trace_Type::Shortest>(instance_copy)) {
-                return Solver::get_trace<Trace_Type::Shortest>(instance_copy).second;
-            } else {
-                return std::nullopt;
-            }
-        case engine_t::poststar:
-            if (Solver::post_star_accepts<Trace_Type::Shortest>(instance_copy)) {
-                return Solver::get_trace<Trace_Type::Shortest>(instance_copy).second;
-            } else {
-                return std::nullopt;
-            }
-        case engine_t::dualstar:
-        default:
-            if (Solver::dual_search_accepts<Trace_Type::Shortest>(instance_copy)) {
-                return Solver::get_trace_dual_search<Trace_Type::Shortest>(instance_copy).second;
-            } else {
-                return std::nullopt;
-            }
-    }
-}
 
 /*template <Trace_Type traceType = Trace_Type::None, typename instance_t>
 bool solve_pre(const instance_t& instance) {
