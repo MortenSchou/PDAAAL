@@ -100,12 +100,16 @@ namespace pdaaal {
         std::unordered_set<Elem> _seen{};
     public:
         template<typename... Args>
-        void emplace(const Weight& weight, Args... args) {
-            _queue.emplace(weight, Elem(std::forward<Args>(args)...));
+        void emplace(const Weight& weight, Args&&... args) {
+            if (Elem elem(std::forward<Args>(args)...); !_queue.empty() || !_seen.contains(elem)) {
+                _queue.emplace(weight, std::move(elem));
+            }
         }
         template<typename... Args>
-        void emplace(Weight&& weight, Args... args) {
-            _queue.emplace(std::move(weight), Elem(std::forward<Args>(args)...));
+        void emplace(Weight&& weight, Args&&... args) {
+            if (Elem elem(std::forward<Args>(args)...); !_queue.empty() || !_seen.contains(elem)) {
+                _queue.emplace(std::move(weight), std::move(elem));
+            }
         }
         void pop() {
             assert(!_seen.contains(_queue.top().second)); // This should be the class invariant.
