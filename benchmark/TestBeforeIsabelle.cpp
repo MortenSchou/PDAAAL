@@ -231,10 +231,10 @@ int main(int argc, const char** argv) {
 //    Parsing parsing("PDA input Options");
     po::options_description input("Input Options");
 //    po::options_description output("Output Options");
-//    size_t pds_id = 0;
-//    size_t initial_id = 0;
-//    size_t final_id = 0;
-    size_t instance_id = 0;
+    size_t pds_id = 0;
+    size_t initial_id = 0;
+    size_t final_id = 0;
+    size_t instance_id = std::numeric_limits<size_t>::max();
 //    std::string input_dir;
 //    bool state_names = false;
 //    bool with_weight = false;
@@ -242,9 +242,9 @@ int main(int argc, const char** argv) {
     bool output_test_setup_isabelle_file = false;
     bool output_instance_isabelle_file = false;
     input.add_options()
-//            ("pds,p", po::value<size_t>(&pds_id), "Index of pushdown")
-//            ("initial,i", po::value<size_t>(&initial_id), "Index of initial P-automaton")
-//            ("final,f", po::value<size_t>(&final_id), "Index of final P-automaton")
+            ("pid", po::value<size_t>(&pds_id), "Index of pushdown")
+            ("iid", po::value<size_t>(&initial_id), "Index of initial P-automaton")
+            ("fid", po::value<size_t>(&final_id), "Index of final P-automaton")
             ("id", po::value<size_t>(&instance_id), "Index of instance")
 //            ("dir,d", po::value<std::string>(&input_dir), "Input directory to read files from.")
 //            ("state-names", po::bool_switch(&state_names), "Enable named states (instead of index).")
@@ -271,10 +271,14 @@ int main(int argc, const char** argv) {
         std::cout << opts << std::endl;
         return 1;
     }
-
+    if (instance_id != std::numeric_limits<size_t>::max()) {
+      pds_id = instance_id;
+      initial_id = instance_id;
+      final_id = instance_id;
+    }
 
     auto instance_variant = parsing.parse_instance<>();
-    std::visit([pds_id=instance_id, initial_id=instance_id, final_id=instance_id, output_full_isabelle_file, output_test_setup_isabelle_file, output_instance_isabelle_file](auto&& instance) {
+    std::visit([pds_id, initial_id, final_id, output_full_isabelle_file, output_test_setup_isabelle_file, output_instance_isabelle_file](auto&& instance) {
         run(*instance, pds_id, initial_id, final_id, output_full_isabelle_file, output_test_setup_isabelle_file, output_instance_isabelle_file);
     }, instance_variant);
 

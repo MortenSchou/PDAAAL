@@ -423,7 +423,7 @@ void generate_pda_without_symmetries(const fs::path& output_dir) {
                     throw std::runtime_error(es.str());
                 }
                 IsabellePrettyPrinter isabelle_pp(out_stream);
-                isabelle_pp.print_rules(name_with_index.str(), pda);
+                isabelle_pp.print_rules(name_with_index.str(), pda, "l");
             }
             {
                 std::stringstream file_name;
@@ -575,7 +575,7 @@ void generate_pautomata_without_symmetries(const fs::path& output_dir, bool init
                         throw std::runtime_error(es.str());
                     }
                     IsabellePrettyPrinter isabelle_pp(out_stream);
-                    isabelle_pp.print_automaton(name_with_index.str(), automaton, pda);
+                    isabelle_pp.print_automaton(name_with_index.str(), automaton, pda, "l");
                 }
                 {
                     std::stringstream file_name;
