@@ -177,7 +177,11 @@ namespace pdaaal::internal {
             uint32_t _back_edge_label = std::numeric_limits<uint32_t>::max()-1; // The null value should not equal epsilon (defensive defaults)
             weight_or_bool_t _best_weight;
 
-            state_t(bool accepting, size_t id) : _accepting(accepting), _id(id) {};
+            state_t(bool accepting, size_t id) : _accepting(accepting), _id(id) {
+                if constexpr (W::is_weight) {
+                    _best_weight = accepting ? W::zero() : min_weight<typename W::type>::max();  // _best_weight is only used for shortest path computations. Computation of longest trace uses the PAutomatonFixedPoint class.
+                }
+            }
 
             state_t(const state_t& other) = default;
         };
